@@ -1,36 +1,20 @@
 #ifndef INPUT_H
 #define INPUT_H
 
-#include <Arduino.h>
+#include "config.h"
 
-// Estado dos 4 botões após leitura + debounce.
-// Usamos bitfields de 1 bit cada para caber tudo em 1 byte (economia de RAM).
-struct InputState {
-  uint8_t esquerda : 1;
-  uint8_t direita  : 1;
-  uint8_t cima     : 1;
-  uint8_t baixo    : 1;
-};
+void inputInit();
 
-// Botão único de maior prioridade quando vários são pressionados ao mesmo
-// tempo. ": uint8_t" força o enum a ocupar 1 byte em vez do int padrão.
-enum Botao : uint8_t {
-  BOTAO_NENHUM,
-  BOTAO_CIMA,
-  BOTAO_BAIXO,
-  BOTAO_ESQUERDA,
-  BOTAO_DIREITA
-};
+// Evento único (edge-triggered) com debounce de 50ms.
+// Retorna o pino do botão cujo aperto acabou de ser confirmado, ou BTN_NONE.
+// Enquanto o botão continuar pressionado, chamadas seguintes retornam BTN_NONE
+// (não repete). Prioridade quando há mais de um pressionado ao mesmo tempo:
+// CIMA > BAIXO > ESQ > DIR.
+uint8_t readButtons(unsigned long now);
 
-// Configura os pinos dos botões como entrada.
-void inputSetup();
-
-// Lê os 4 botões com debounce e devolve o estado atual.
-// Deve ser chamada uma vez por tick do game loop (nunca dentro de um delay()).
-InputState inputRead();
-
-// Resolve qual botão reportar quando mais de um está pressionado ao mesmo
-// tempo. Prioridade: cima > baixo > esquerda > direita.
-Botao inputBotaoPrioritario(const InputState &input);
+// Estado atual (nível, já debounced) do botão pressionado, ou BTN_NONE.
+// Não consome evento — útil para feedback visual contínuo (ex.: tela de teste).
+// Reflete o estado calculado na última chamada de readButtons().
+uint8_t getHeldButton();
 
 #endif // INPUT_H

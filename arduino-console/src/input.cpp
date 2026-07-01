@@ -1,55 +1,71 @@
+#include <Arduino.h>
 #include "input.h"
-#include "../include/config.h"
 
-// Timestamps da última mudança de estado de cada botão, para debounce.
-// static: vive só neste arquivo, não polui o escopo global do projeto.
-static unsigned long lastChangeEsq = 0;
-static unsigned long lastChangeDir = 0;
-static unsigned long lastChangeCima = 0;
-static unsigned long lastChangeBaixo = 0;
+static const unsigned long DEBOUNCE_DELAY = 50;
 
-static uint8_t rawEsq = LOW, rawDir = LOW, rawCima = LOW, rawBaixo = LOW;
-static uint8_t stableEsq = LOW, stableDir = LOW, stableCima = LOW, stableBaixo = LOW;
+struct ButtonState {
+  uint8_t pin;
+  bool lastRaw;
+  bool stable;
+  unsigned long lastChangeTime;
+};
 
-// Aplica debounce simples baseado em millis() a um único botão.
-// Retorna o valor estável (já filtrado) e atualiza os "últimos" por referência.
-static uint8_t debounce(int pino, uint8_t &rawAnterior, uint8_t &estavel, unsigned long &ultimaMudanca) {
-  uint8_t leituraAtual = digitalRead(pino);
+static ButtonState btnEsq   = { BTN_ESQ,   false, false, 0 };
+static ButtonState btnDir   = { BTN_DIR,   false, false, 0 };
+static ButtonState btnCima  = { BTN_CIMA,  false, false, 0 };
+static ButtonState btnBaixo = { BTN_BAIXO, false, false, 0 };
 
-  if (leituraAtual != rawAnterior) {
-    ultimaMudanca = millis();
-    rawAnterior = leituraAtual;
-  }
-
-  if ((millis() - ultimaMudanca) > DEBOUNCE_MS) {
-    estavel = leituraAtual;
-  }
-
-  return estavel;
+static void resetButton(ButtonState &b) {
+  b.lastRaw = false;
+  b.stable = false;
+  b.lastChangeTime = 0;
 }
 
-void inputSetup() {
+void inputInit() {
   pinMode(BTN_ESQ, INPUT);
   pinMode(BTN_DIR, INPUT);
   pinMode(BTN_CIMA, INPUT);
   pinMode(BTN_BAIXO, INPUT);
+
+  resetButton(btnEsq);
+  resetButton(btnDir);
+  resetButton(btnCima);
+  resetButton(btnBaixo);
 }
 
-InputState inputRead() {
-  InputState estado;
+// Retorna true se uma transição solto->pressionado acabou de ser confirmada
+static bool updatePressed(ButtonState &b, unsigned long now) {
+  bool raw = digitalRead(b.pin) == HIGH;
+  bool justPressed = false;
 
-  estado.esquerda = debounce(BTN_ESQ, rawEsq, stableEsq, lastChangeEsq) == HIGH;
-  estado.direita  = debounce(BTN_DIR, rawDir, stableDir, lastChangeDir) == HIGH;
-  estado.cima     = debounce(BTN_CIMA, rawCima, stableCima, lastChangeCima) == HIGH;
-  estado.baixo    = debounce(BTN_BAIXO, rawBaixo, stableBaixo, lastChangeBaixo) == HIGH;
-
-  return estado;
+  if (raw != b.lastRaw) {
+    // reinicia a janela de debounce a cada mudança observada no pino
+    b.lastRaw = raw;
+    b.lastChangeTime = now;
+  } else if (now - b.lastChangeTime >= DEBOUNCE_DELAY && b.stable != raw) {
+    b.stable = raw;
+    justPressed = b.stable;
+  }
+  return justPressed;
 }
 
-Botao inputBotaoPrioritario(const InputState &input) {
-  if (input.cima)     return BOTAO_CIMA;
-  if (input.baixo)    return BOTAO_BAIXO;
-  if (input.esquerda) return BOTAO_ESQUERDA;
-  if (input.direita)  return BOTAO_DIREITA;
-  return BOTAO_NENHUM;
+uint8_t readButtons(unsigned long now) {
+  bool cima  = updatePressed(btnCima, now);
+  bool baixo = updatePressed(btnBaixo, now);
+  bool esq   = updatePressed(btnEsq, now);
+  bool dir   = updatePressed(btnDir, now);
+
+  if (cima)  return BTN_CIMA;
+  if (baixo) return BTN_BAIXO;
+  if (esq)   return BTN_ESQ;
+  if (dir)   return BTN_DIR;
+  return BTN_NONE;
+}
+
+uint8_t getHeldButton() {
+  if (btnCima.stable)  return BTN_CIMA;
+  if (btnBaixo.stable) return BTN_BAIXO;
+  if (btnEsq.stable)   return BTN_ESQ;
+  if (btnDir.stable)   return BTN_DIR;
+  return BTN_NONE;
 }

@@ -2,15 +2,21 @@
 #define MENU_H
 
 #include <LiquidCrystal.h>
-#include "../include/config.h"
-#include "input.h"
+#include "config.h"
 
-// Inicializa o índice de seleção do menu.
-void menuSetup();
+extern LiquidCrystal lcd;
 
-// Atualiza a seleção do menu com base no input do usuário e desenha na tela.
-// Retorna STATE_MENU enquanto o jogador navega, ou o estado do jogo escolhido
-// quando o botão de confirmação (DIR) é pressionado.
-GameState menuUpdate(LiquidCrystal &lcd, const InputState &input);
+void menuInit();
+
+// Chamado a cada tick do game loop. Retorna o GameState a iniciar
+// (STATE_SNAKE/PONG/INVADERS quando o jogador confirma um jogo),
+// ou STATE_MENU quando ainda não há seleção.
+GameState menuUpdate(unsigned long now);
+
+int getSelectedIndex();
+
+// Mostra a tela de fim de jogo e espera CIMA para voltar ao menu
+// (a confirmação é tratada dentro de menuUpdate()).
+void showGameOver(int score);
 
 #endif // MENU_H
