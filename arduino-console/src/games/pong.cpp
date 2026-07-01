@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <stdio.h>
 #include "pong.h"
 #include "menu.h"
 #include "input.h"
@@ -7,8 +8,16 @@ static const uint16_t SPEED_INITIAL = 200;
 static const uint16_t SPEED_MIN = 80;
 static const uint16_t SPEED_STEP = 15;
 static const int WIN_SCORE = 5;
+static const unsigned long POINT_FLASH_MS = 900;
 
-enum PongState { PONG_COUNTDOWN, PONG_PLAYING, PONG_OVER };
+enum PongState { PONG_COUNTDOWN, PONG_PLAYING, PONG_POINT_FLASH, PONG_OVER };
+
+// Sinaliza pra pongUpdate() que um ponto acabou de ser marcado neste tick,
+// pra mostrar a tela de "PONTO!" em vez de continuar o jogo silenciosamente.
+// Sem isso, o reposicionamento da bola no centro parece um teleporte sem
+// explicação (foi exatamente o que gerou o relato de "bola volta sozinha").
+static bool justScored = false;
+static unsigned long pointFlashStart = 0;
 
 static float ballX = 7.5f;
 static float ballY = 0.5f;
@@ -83,6 +92,7 @@ void pongOnPointScored(Winner scorer) {
     cpuScore++;
   }
 
+  justScored = true;
   speed = (speed > SPEED_MIN + SPEED_STEP) ? speed - SPEED_STEP : SPEED_MIN;
 
   pongResetBall();
@@ -171,6 +181,16 @@ static void drawCountdown(uint8_t step) {
   }
 }
 
+static void drawPointFlash() {
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print(F("     PONTO!     "));
+  char line[17];
+  snprintf(line, sizeof(line), "    %d  x  %d    ", playerScore, cpuScore);
+  lcd.setCursor(0, 1);
+  lcd.print(line);
+}
+
 void pongUpdate(unsigned long now) {
   if (pongState == PONG_OVER) return;
 
@@ -189,6 +209,16 @@ void pongUpdate(unsigned long now) {
     return;
   }
 
+  if (pongState == PONG_POINT_FLASH) {
+    if (now - pointFlashStart >= POINT_FLASH_MS) {
+      pongState = PONG_PLAYING;
+      lcd.clear();
+      for (uint8_t i = 0; i < 32; i++) drawnCells[i] = 0;
+      pongDraw();
+    }
+    return;
+  }
+
   uint8_t evento = readButtons(now);
   switch (evento) {
     case BTN_CIMA:  playerRow = 0; break;
@@ -199,9 +229,14 @@ void pongUpdate(unsigned long now) {
   if (now - lastUpdate >= speed) {
     lastUpdate += speed;
     updateCpu();
+    justScored = false;
     pongStep();
     if (gameOver) {
       pongState = PONG_OVER;
+    } else if (justScored) {
+      pongState = PONG_POINT_FLASH;
+      pointFlashStart = now;
+      drawPointFlash();
     } else {
       pongDraw();
     }
