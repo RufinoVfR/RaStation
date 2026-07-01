@@ -9,6 +9,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: arduino-console
 
     steps:
       - uses: actions/checkout@v4
@@ -23,7 +26,7 @@ jobs:
         run: pip install platformio
 
       - name: Compile projeto
-        run: pio run
+        run: pio run -e uno
 
       - name: Checar uso de RAM
-        run: pio run 2>&1 | grep -E "RAM|Flash"
+        run: pio run -e uno 2>&1 | grep -E "RAM|Flash"
