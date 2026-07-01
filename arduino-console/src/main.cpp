@@ -2,6 +2,7 @@
 #include "config.h"
 #include "input.h"
 #include "menu.h"
+#include "games/snake.h"
 
 static GameState currentState = STATE_MENU;
 static unsigned long lastUpdate = 0;
@@ -19,10 +20,21 @@ void loop() {
     lastUpdate = now;
 
     switch (currentState) {
-      case STATE_MENU:
-        currentState = menuUpdate(now);
+      case STATE_MENU: {
+        GameState next = menuUpdate(now);
+        if (next != STATE_MENU) {
+          currentState = next;
+          if (next == STATE_SNAKE) snakeInit();
+        }
         break;
+      }
       case STATE_SNAKE:
+        snakeUpdate(now);
+        if (snakeIsGameOver()) {
+          showGameOver(snakeGetScore());
+          currentState = STATE_MENU;
+        }
+        break;
       case STATE_PONG:
       case STATE_INVADERS:
       case STATE_GAMEOVER:
