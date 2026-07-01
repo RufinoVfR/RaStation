@@ -45,3 +45,11 @@ InputState inputRead() {
 
   return estado;
 }
+
+Botao inputBotaoPrioritario(const InputState &input) {
+  if (input.cima)     return BOTAO_CIMA;
+  if (input.baixo)    return BOTAO_BAIXO;
+  if (input.esquerda) return BOTAO_ESQUERDA;
+  if (input.direita)  return BOTAO_DIREITA;
+  return BOTAO_NENHUM;
+}
