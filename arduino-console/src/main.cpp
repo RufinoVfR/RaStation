@@ -4,6 +4,7 @@
 #include "menu.h"
 #include "games/snake.h"
 #include "games/pong.h"
+#include "games/invaders.h"
 
 static GameState currentState = STATE_MENU;
 static unsigned long lastUpdate = 0;
@@ -27,6 +28,7 @@ void loop() {
           currentState = next;
           if (next == STATE_SNAKE) snakeInit();
           if (next == STATE_PONG) pongInit();
+          if (next == STATE_INVADERS) invadersInit();
         }
         break;
       }
@@ -45,8 +47,13 @@ void loop() {
         }
         break;
       case STATE_INVADERS:
+        invadersUpdate(now);
+        if (invadersIsGameOver()) {
+          showGameOver(invadersGetScore());
+          currentState = STATE_MENU;
+        }
+        break;
       case STATE_GAMEOVER:
-        // Jogos chegam nas próximas etapas
         break;
     }
   }
