@@ -3,6 +3,7 @@
 
 #include <LiquidCrystal.h>
 #include "config.h"
+#include "scores.h"
 
 extern LiquidCrystal lcd;
 
@@ -15,8 +16,8 @@ GameState menuUpdate(unsigned long now);
 
 int getSelectedIndex();
 
-// Mostra a tela de fim de jogo e espera CIMA para voltar ao menu
-// (a confirmação é tratada dentro de menuUpdate()).
-void showGameOver(int score);
+// Mostra a tela de fim de jogo (com "NOVO RECORDE!" por 2s se for o caso)
+// e espera CIMA para voltar ao menu (tratado dentro de menuUpdate()).
+void showGameOver(GameType game, int score);
 
 #endif // MENU_H

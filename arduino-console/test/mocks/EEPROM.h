@@ -1,5 +1,6 @@
 #pragma once
 #include <stdint.h>
+#include <stddef.h>
 
 // static local dentro de função inline: garante uma única cópia da "EEPROM"
 // compartilhada entre todos os .cpp linkados no binário de teste (ver

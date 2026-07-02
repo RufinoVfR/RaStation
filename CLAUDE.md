@@ -247,3 +247,50 @@ void loop() {
 3. Implementar leitura dos botões com debounce
 4. Implementar o menu navegável
 5. Implementar o Snake como primeiro jogo
+
+---
+
+## Estado final do projeto (Etapa 8 — concluída)
+
+O projeto está fisicamente montado (dentro de `arduino-console/`) e as 8 etapas
+do backlog foram implementadas. Note que o mapeamento de pinos do LCD abaixo
+diverge do que está documentado lá em cima — foi atualizado depois que um dos
+pinos digitais originais (D2/D3/D4/D5/D11/D12) apresentou defeito físico
+durante a montagem.
+
+### Uso de memória (build final, `pio run -e uno`)
+- **RAM:** 737 / 2048 bytes (36.0%)
+- **Flash:** 16.470 / 32.256 bytes (51.1%)
+
+### Testes
+- **79 testes passando, 0 falhando** (`pio test -e native`), distribuídos em:
+  test_input (7), test_menu (11), test_snake (15), test_pong (13),
+  test_invaders (15), test_sound (10), test_scores (8)
+- Análise estática (`test/static_analysis.sh`): zero falhas — sem `delay()`,
+  sem `String`, `F()` usado em todos os literais, include guards em todos os `.h`
+- Zero warnings de compilação
+
+### Funcionalidades
+- Menu navegável (ESQ/DIR/CIMA) com animação de entrada, splash "ARCADE" no
+  boot e recorde de cada jogo exibido na tela de seleção
+- Snake, Pong e Space Invaders completos, com dificuldade progressiva
+- Efeitos sonoros no buzzer (fila não bloqueante de até 8 notas)
+- Recordes persistidos na EEPROM, com tela de "NOVO RECORDE!" no game over
+- Testado em hardware real (LCD, botões, buzzer)
+
+### Limitações conhecidas
+- **Pinagem do LCD remapeada:** RS/EN/D4-D7 estão em A0-A5 (usados como
+  digitais), não mais em D2/D3/D4/D5/D11/D12 — um desses pinos digitais
+  ficou danificado durante a montagem. Ver `include/config.h` para o
+  mapeamento atual.
+- **Testes nativos (`pio test -e native`) dependem de rede:** o PlatformIO
+  precisa baixar a lib Unity do registro, e a máquina de desenvolvimento tem
+  instabilidade recorrente de SSL/rede pra esse domínio específico
+  (`CRYPT_E_NO_REVOCATION_CHECK`). Contorno usado quando acontece: clonar
+  `https://github.com/ThrowTheSwitch/Unity` direto em
+  `.pio/libdeps/native/Unity` e gravar um `.piopm` fake pra o PlatformIO
+  tratar como já instalado. Não afeta o firmware do Arduino.
+- **Space Invaders simplificado:** como o LCD só tem 2 linhas, "os inimigos
+  alcançarem a linha do jogador" não é uma descida vertical de verdade — é
+  simulado como um contador de quantas vezes o grupo bateu na borda.
+- **Joystick KY-023 do kit não foi integrado** (só os 4 botões push-button).

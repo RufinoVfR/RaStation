@@ -42,21 +42,21 @@ void loop() {
       case STATE_SNAKE:
         snakeUpdate(now);
         if (snakeIsGameOver()) {
-          showGameOver(snakeGetScore());
+          showGameOver(GAME_SNAKE, snakeGetScore());
           currentState = STATE_MENU;
         }
         break;
       case STATE_PONG:
         pongUpdate(now);
         if (pongIsGameOver()) {
-          showGameOver(pongGetPlayerScore());
+          showGameOver(GAME_PONG, pongGetPlayerScore());
           currentState = STATE_MENU;
         }
         break;
       case STATE_INVADERS:
         invadersUpdate(now);
         if (invadersIsGameOver()) {
-          showGameOver(invadersGetScore());
+          showGameOver(GAME_INVADERS, invadersGetScore());
           currentState = STATE_MENU;
         }
         break;

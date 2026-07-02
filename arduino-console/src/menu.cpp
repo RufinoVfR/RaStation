@@ -7,41 +7,58 @@
 
 LiquidCrystal lcd(LCD_RS, LCD_EN, LCD_D4, LCD_D5, LCD_D6, LCD_D7);
 
-enum MenuState { MENU_ANIMATING, MENU_IDLE, MENU_CONFIRMING };
+enum MenuState { MENU_SPLASH, MENU_ANIMATING, MENU_IDLE, MENU_CONFIRMING };
 
 struct GameEntry {
   const char* name;  // PROGMEM, só o nome em maiúsculas
-  const char* desc;  // PROGMEM, já preenchido para ocupar as 16 colunas
+  const char* desc;  // PROGMEM, descrição curta (até 9 colunas)
   GameState state;
+  GameType scoreType;
 };
 
-// Descrições já vêm com o preenchimento certo para caber em 16 colunas —
-// evita ter que centralizar texto em tempo de execução.
+// Descrições curtas: o resto da linha 1 é ocupado pelo recorde ("Hi:NNN").
 static const char NAME_SNAKE[]    PROGMEM = "SNAKE";
-static const char DESC_SNAKE[]    PROGMEM = " Come e cresce  ";
+static const char DESC_SNAKE[]    PROGMEM = "Cobra";
 static const char NAME_PONG[]     PROGMEM = "PONG";
-static const char DESC_PONG[]     PROGMEM = " Bola e raquetes";
+static const char DESC_PONG[]     PROGMEM = "Raquete";
 static const char NAME_INVADERS[] PROGMEM = "INVADERS";
-static const char DESC_INVADERS[] PROGMEM = " Destrua aliens ";
+static const char DESC_INVADERS[] PROGMEM = "Aliens";
 
 static const GameEntry GAMES[] = {
-  { NAME_SNAKE,    DESC_SNAKE,    STATE_SNAKE },
-  { NAME_PONG,     DESC_PONG,     STATE_PONG },
-  { NAME_INVADERS, DESC_INVADERS, STATE_INVADERS },
+  { NAME_SNAKE,    DESC_SNAKE,    STATE_SNAKE,    GAME_SNAKE },
+  { NAME_PONG,     DESC_PONG,     STATE_PONG,     GAME_PONG },
+  { NAME_INVADERS, DESC_INVADERS, STATE_INVADERS, GAME_INVADERS },
 };
 static const uint8_t NUM_GAMES = sizeof(GAMES) / sizeof(GAMES[0]);
 
 static const unsigned long ANIM_CHAR_DELAY = 80;
 static const uint8_t REVEAL_ALL = 255; // maior que qualquer nome de jogo
 
-static MenuState menuState = MENU_ANIMATING;
+static const unsigned long SPLASH_CHAR_DELAY = 80;
+static const unsigned long SPLASH_BLINK_INTERVAL = 200;
+static const uint8_t SPLASH_BLINK_TRANSITIONS = 6; // 3 piscadas = 6 trocas de estado
+static const char SPLASH_TITLE[] PROGMEM = "ARCADE";
+
+static const unsigned long RECORD_FLASH_MS = 2000;
+
+static MenuState menuState = MENU_SPLASH;
 static int selectedIndex = 0;
 
 static unsigned long animLastStep = 0;
 static uint8_t animCharsShown = 0;
 static uint8_t animNameLen = 0;
 
+enum SplashPhase { SPLASH_TYPING, SPLASH_BLINKING };
+static SplashPhase splashPhase = SPLASH_TYPING;
+static unsigned long splashStepStart = 0;
+static uint8_t splashCharsShown = 0;
+static uint8_t splashBlinkTransitions = 0;
+static bool splashVisible = true;
+
 static bool showingGameOver = false;
+static bool showingRecordFlash = false;
+static unsigned long recordFlashStart = 0;
+static int pendingGameOverScore = 0;
 
 // Desenha "< NOME          >" revelando só os primeiros `revealCount`
 // caracteres do nome (o resto fica em branco — usado pela animação).
@@ -62,11 +79,16 @@ static void drawLine0(uint8_t revealCount) {
   lcd.print(line);
 }
 
+// "Cobra    Hi:150" — descrição curta à esquerda, recorde à direita.
 static void drawLine1() {
-  char descLocal[17];
+  char descLocal[10];
   strcpy_P(descLocal, GAMES[selectedIndex].desc);
+  int highScore = loadHighScore(GAMES[selectedIndex].scoreType);
+
+  char line[17];
+  snprintf(line, sizeof(line), "%-9.9s Hi:%-3d", descLocal, highScore);
   lcd.setCursor(0, 1);
-  lcd.print(descLocal);
+  lcd.print(line);
 }
 
 // Redesenha o nome inteiro de uma vez (usado ao navegar com ESQ/DIR —
@@ -89,20 +111,51 @@ static void startAnimation() {
   drawLine0(0);
 }
 
+static void drawSplashFrame(bool visible) {
+  lcd.setCursor(0, 0);
+  lcd.print(visible ? F("     ARCADE     ") : F("                "));
+  lcd.setCursor(0, 1);
+  lcd.print(visible ? F("   Press UP     ") : F("                "));
+}
+
+static void drawSplashTyping(uint8_t revealCount) {
+  char titleLocal[7]; // "ARCADE" + '\0'
+  strcpy_P(titleLocal, SPLASH_TITLE);
+
+  char line[17];
+  memset(line, ' ', 16);
+  line[16] = '\0';
+  for (uint8_t i = 0; i < revealCount && titleLocal[i] != '\0'; i++) {
+    line[5 + i] = titleLocal[i]; // centralizado (6 chars em 16 colunas)
+  }
+  lcd.setCursor(0, 0);
+  lcd.print(line);
+}
+
+static void startSplash() {
+  menuState = MENU_SPLASH;
+  splashPhase = SPLASH_TYPING;
+  splashStepStart = millis();
+  splashCharsShown = 0;
+  splashBlinkTransitions = 0;
+  splashVisible = true;
+  lcd.clear();
+  lcd.setCursor(0, 1);
+  lcd.print(F("   Press UP     "));
+}
+
 void menuInit() {
   lcd.begin(LARGURA, ALTURA);
   selectedIndex = 0;
   showingGameOver = false;
-  startAnimation();
+  startSplash();
 }
 
 int getSelectedIndex() {
   return selectedIndex;
 }
 
-void showGameOver(int score) {
-  showingGameOver = true;
-  playSound(SFX_GAMEOVER);
+static void drawGameOverScreen(int score) {
   lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print(F("   GAME OVER    "));
@@ -115,10 +168,77 @@ void showGameOver(int score) {
   lcd.print(line1);
 }
 
+void showGameOver(GameType game, int score) {
+  showingGameOver = true;
+  playSound(SFX_GAMEOVER);
+
+  bool newRecord = isNewRecord(game, score);
+  saveHighScore(game, score);
+
+  if (newRecord) {
+    showingRecordFlash = true;
+    recordFlashStart = millis();
+    pendingGameOverScore = score;
+
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print(F("  NOVO RECORDE! "));
+    char line1[17];
+    snprintf(line1, sizeof(line1), "   Pontos: %-3d  ", score);
+    lcd.setCursor(0, 1);
+    lcd.print(line1);
+  } else {
+    showingRecordFlash = false;
+    drawGameOverScreen(score);
+  }
+}
+
 GameState menuUpdate(unsigned long now) {
   uint8_t evento = readButtons(now);
 
+  if (menuState == MENU_SPLASH) {
+    if (evento != BTN_NONE) {
+      startAnimation();
+      return STATE_MENU;
+    }
+
+    if (splashPhase == SPLASH_TYPING) {
+      bool changed = false;
+      while (splashCharsShown < 6 && now - splashStepStart >= SPLASH_CHAR_DELAY) {
+        splashStepStart += SPLASH_CHAR_DELAY;
+        splashCharsShown++;
+        changed = true;
+      }
+      if (changed) drawSplashTyping(splashCharsShown);
+      if (splashCharsShown >= 6) {
+        splashPhase = SPLASH_BLINKING;
+        splashStepStart = now;
+        splashBlinkTransitions = 0;
+        splashVisible = true;
+      }
+    } else { // SPLASH_BLINKING
+      while (splashBlinkTransitions < SPLASH_BLINK_TRANSITIONS &&
+             now - splashStepStart >= SPLASH_BLINK_INTERVAL) {
+        splashStepStart += SPLASH_BLINK_INTERVAL;
+        splashVisible = !splashVisible;
+        splashBlinkTransitions++;
+        drawSplashFrame(splashVisible);
+      }
+      if (splashBlinkTransitions >= SPLASH_BLINK_TRANSITIONS) {
+        startAnimation();
+      }
+    }
+    return STATE_MENU;
+  }
+
   if (showingGameOver) {
+    if (showingRecordFlash) {
+      if (now - recordFlashStart >= RECORD_FLASH_MS) {
+        showingRecordFlash = false;
+        drawGameOverScreen(pendingGameOverScore);
+      }
+      return STATE_MENU;
+    }
     if (evento == BTN_CIMA) {
       showingGameOver = false;
       startAnimation();
@@ -168,6 +288,10 @@ GameState menuUpdate(unsigned long now) {
     case MENU_CONFIRMING:
       // Inalcançável: MENU_IDLE resolve a confirmação no mesmo tick (acima).
       menuState = MENU_IDLE;
+      break;
+
+    case MENU_SPLASH:
+      // Tratado separadamente no início da função.
       break;
   }
 

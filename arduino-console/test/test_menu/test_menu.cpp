@@ -20,9 +20,21 @@ void setUp() {
 
 void tearDown() {}
 
-// Avança tempo suficiente para terminar a animação de entrada de qualquer
-// um dos 3 jogos (o mais longo, INVADERS, leva 8*80ms = 640ms).
+// Avança tempo suficiente pra passar a splash inicial (digitação + 3
+// piscadas) e chegar em MENU_ANIMATING. Precisa de 2 chamadas porque a
+// transição digitação->piscar só é processada numa chamada, e piscar->menu
+// só é processada na chamada seguinte (mesmo motivo do "seed read").
+static void finishSplash() {
+  advanceTime(1000);
+  menuUpdate(millis());
+  advanceTime(2000);
+  menuUpdate(millis());
+}
+
+// Avança tempo suficiente para terminar a splash E a animação de entrada de
+// qualquer um dos 3 jogos (o mais longo, INVADERS, leva 8*80ms = 640ms).
 static void finishAnimation() {
+  finishSplash();
   advanceTime(1000);
   menuUpdate(millis());
 }
@@ -40,8 +52,19 @@ static void pressButton(uint8_t pin) {
   menuUpdate(millis());
 }
 
+void test_splash_pula_ao_apertar_botao() {
+  // logo após menuInit(), ainda na tela de splash
+  setPin(BTN_CIMA, HIGH);
+  menuUpdate(millis()); // seed: registra a transição do pino
+  advanceTime(60);
+  GameState result = menuUpdate(millis()); // evento detectado -> pula a splash
+
+  TEST_ASSERT_EQUAL(STATE_MENU, result);
+  TEST_ASSERT_EQUAL(0, getSelectedIndex()); // já entrou na animação do primeiro jogo
+}
+
 void test_estado_animating_nao_aceita_input() {
-  // logo após menuInit(), o menu ainda está na animação de entrada
+  finishSplash(); // sai da splash, entra em MENU_ANIMATING
   setPin(BTN_DIR, HIGH);
   menuUpdate(millis());
   advanceTime(60);
@@ -90,7 +113,9 @@ void test_selecao_pong_retorna_estado_correto() {
 }
 
 void test_gameover_exibe_pontuacao() {
-  showGameOver(150);
+  showGameOver(GAME_SNAKE, 150);
+  // pode cair na tela de "NOVO RECORDE!" (primeiro score sempre é recorde)
+  // ou na tela normal — os dois mostram "150" em algum lugar.
   TEST_ASSERT_TRUE(lcd.contains("150"));
 }
 
@@ -103,7 +128,7 @@ void test_integracao_boot_wraparound_completo() {
 }
 
 void test_integracao_gameover_volta_para_menu() {
-  showGameOver(75);
+  showGameOver(GAME_PONG, 75);
   setPin(BTN_CIMA, HIGH);
   menuUpdate(millis());
   advanceTime(60);
@@ -127,6 +152,7 @@ void test_simulacao_ascii_dos_3_jogos() {
 
 int main() {
   UNITY_BEGIN();
+  RUN_TEST(test_splash_pula_ao_apertar_botao);
   RUN_TEST(test_estado_animating_nao_aceita_input);
   RUN_TEST(test_navegacao_dir_avanca);
   RUN_TEST(test_navegacao_wraparound_dir);
