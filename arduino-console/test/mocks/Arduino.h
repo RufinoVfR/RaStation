@@ -10,6 +10,14 @@
 #define OUTPUT 1
 #define INPUT_PULLUP 2
 
+// Pinos analógicos usados como digitais (mesma numeração do Arduino Uno)
+#define A0 14
+#define A1 15
+#define A2 16
+#define A3 17
+#define A4 18
+#define A5 19
+
 // PROGMEM/flash: no PC não existe memória de programa separada da RAM,
 // então essas macros só precisam "não fazer nada" além de manter a mesma
 // assinatura de tipos que o código real (AVR) usa via <avr/pgmspace.h>.
