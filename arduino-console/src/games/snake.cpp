@@ -3,6 +3,7 @@
 #include "snake.h"
 #include "menu.h"
 #include "input.h"
+#include "sound.h"
 
 static const uint8_t SNAKE_BUF_SIZE = 28;
 static const uint16_t MOVE_INTERVAL_INITIAL = 400;
@@ -157,6 +158,7 @@ void snakeMoveStep() {
 
   if (col < 0 || col > 15) {
     gameOver = true;
+    playSound(SFX_SNAKE_DEAD);
     return;
   }
 
@@ -169,6 +171,7 @@ void snakeMoveStep() {
   for (uint8_t i = 0; i < checkCount; i++) {
     if (snakeGetSegment(i) == newPos) {
       gameOver = true;
+      playSound(SFX_SNAKE_DEAD);
       return;
     }
   }
@@ -185,6 +188,7 @@ void snakeMoveStep() {
 // testar o acúmulo de velocidade sem depender de dezenas de movimentos reais
 // (que esbarrariam em parede ou no próprio corpo antes de chegar no mínimo).
 void snakeOnFoodEaten() {
+  playSound(SFX_SNAKE_EAT);
   score += 10;
   foodEatenCount++;
   if (foodEatenCount % 3 == 0 && moveInterval > MOVE_INTERVAL_MIN) {

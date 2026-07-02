@@ -2,6 +2,7 @@
 #include "invaders.h"
 #include "menu.h"
 #include "input.h"
+#include "sound.h"
 
 static const uint16_t MOVE_INITIAL = 600;
 static const uint16_t MOVE_MIN = 100;
@@ -72,8 +73,9 @@ uint8_t invadersGetGroupRow() { return groupRow; }
 void invadersSetGroupRow(uint8_t row) { groupRow = row; }
 
 void invadersCheckDescent() {
-  if (groupRow >= 1) {
+  if (groupRow >= 1 && !gameOver) {
     gameOver = true;
+    playSound(SFX_INV_DEAD);
   }
 }
 
@@ -85,6 +87,7 @@ void invadersShoot() {
   playerProjActive = true;
   playerProjCol = shipCol;
   playerProjAge = 0;
+  playSound(SFX_INV_SHOOT);
 }
 
 bool invadersPlayerProjectileActive() { return playerProjActive; }
@@ -102,6 +105,7 @@ void invadersCheckPlayerCollision() {
       invadersKillEnemy(i);
       playerProjActive = false;
       score += 10 + (wave - 1) * 5;
+      playSound(SFX_INV_HIT);
       return;
     }
   }
@@ -133,6 +137,7 @@ void invadersCheckShipCollision() {
   if (enemyProjActive && enemyProjCol == shipCol) {
     enemyProjActive = false;
     gameOver = true;
+    playSound(SFX_INV_DEAD);
   }
 }
 
@@ -156,6 +161,7 @@ static void startWave(bool isFirstWave) {
     wave++;
     moveInterval = (moveInterval > MOVE_MIN + MOVE_STEP) ? moveInterval - MOVE_STEP : MOVE_MIN;
     shootInterval = (shootInterval > SHOOT_MIN + SHOOT_STEP) ? shootInterval - SHOOT_STEP : SHOOT_MIN;
+    playSound(SFX_LEVELUP);
   }
 }
 

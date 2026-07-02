@@ -3,6 +3,7 @@
 #include "pong.h"
 #include "menu.h"
 #include "input.h"
+#include "sound.h"
 
 static const uint16_t SPEED_INITIAL = 200;
 static const uint16_t SPEED_MIN = 80;
@@ -93,6 +94,7 @@ void pongOnPointScored(Winner scorer) {
   }
 
   justScored = true;
+  playSound(SFX_PONG_SCORE);
   speed = (speed > SPEED_MIN + SPEED_STEP) ? speed - SPEED_STEP : SPEED_MIN;
 
   pongResetBall();
@@ -113,10 +115,10 @@ void pongStep() {
   // colisão com topo/base: inverte Y
   if (ballY <= 0.0f) {
     ballY = 0.0f;
-    if (velY < 0) velY = -velY;
+    if (velY < 0) { velY = -velY; playSound(SFX_PONG_WALL); }
   } else if (ballY >= 1.0f) {
     ballY = 1.0f;
-    if (velY > 0) velY = -velY;
+    if (velY > 0) { velY = -velY; playSound(SFX_PONG_WALL); }
   }
 
   uint8_t ballRow = (ballY < 0.5f) ? 0 : 1;
@@ -125,6 +127,7 @@ void pongStep() {
     if (ballRow == playerRow) {
       ballX = 0.0f;
       if (velX < 0) velX = -velX; // rebate
+      playSound(SFX_PONG_HIT);
     } else {
       pongOnPointScored(WINNER_CPU); // saiu pela esquerda
     }
@@ -132,6 +135,7 @@ void pongStep() {
     if (ballRow == cpuRow) {
       ballX = 15.0f;
       if (velX > 0) velX = -velX; // rebate
+      playSound(SFX_PONG_HIT);
     } else {
       pongOnPointScored(WINNER_PLAYER); // saiu pela direita
     }

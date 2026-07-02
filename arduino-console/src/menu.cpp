@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include "menu.h"
 #include "input.h"
+#include "sound.h"
 
 LiquidCrystal lcd(LCD_RS, LCD_EN, LCD_D4, LCD_D5, LCD_D6, LCD_D7);
 
@@ -101,6 +102,7 @@ int getSelectedIndex() {
 
 void showGameOver(int score) {
   showingGameOver = true;
+  playSound(SFX_GAMEOVER);
   lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print(F("   GAME OVER    "));
@@ -146,9 +148,11 @@ GameState menuUpdate(unsigned long now) {
     case MENU_IDLE:
       if (evento == BTN_DIR) {
         selectedIndex = (selectedIndex + 1) % NUM_GAMES;
+        playSound(SFX_MENU_MOVE);
         drawFullMenu();
       } else if (evento == BTN_ESQ) {
         selectedIndex = (selectedIndex - 1 + NUM_GAMES) % NUM_GAMES;
+        playSound(SFX_MENU_MOVE);
         drawFullMenu();
       } else if (evento == BTN_CIMA) {
         // MENU_CONFIRMING é resolvido no mesmo tick: não há tela intermediária,
@@ -156,6 +160,7 @@ GameState menuUpdate(unsigned long now) {
         menuState = MENU_CONFIRMING;
         GameState chosen = GAMES[selectedIndex].state;
         menuState = MENU_IDLE;
+        playSound(SFX_MENU_SELECT);
         return chosen;
       }
       break;

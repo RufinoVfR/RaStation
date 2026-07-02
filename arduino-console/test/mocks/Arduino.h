@@ -19,6 +19,7 @@
 #define pgm_read_byte(addr) (*(const uint8_t*)(addr))
 #define strlen_P(s) strlen(s)
 #define strcpy_P(dst, src) strcpy(dst, src)
+#define memcpy_P(dst, src, n) memcpy(dst, src, n)
 
 // Este mock é incluído por vários .cpp (src/*.cpp e test/*.cpp) que são
 // linkados juntos no mesmo binário de teste. Uma variável `static` no escopo

@@ -2,6 +2,7 @@
 #include "config.h"
 #include "input.h"
 #include "menu.h"
+#include "sound.h"
 #include "games/snake.h"
 #include "games/pong.h"
 #include "games/invaders.h"
@@ -13,11 +14,17 @@ static const unsigned long TICK_MS = 50;
 void setup() {
   Serial.begin(9600);
   inputInit();
+  soundInit();
   menuInit();
 }
 
 void loop() {
   unsigned long now = millis();
+
+  // O som é atualizado a cada volta do loop (não só a cada TICK_MS) pra
+  // acompanhar notas curtas com boa resolução, sem nunca usar delay().
+  updateSound(now);
+
   if (now - lastUpdate >= TICK_MS) {
     lastUpdate = now;
 
