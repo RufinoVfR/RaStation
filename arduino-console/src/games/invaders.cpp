@@ -11,16 +11,14 @@ static const uint16_t SHOOT_INITIAL = 3000;
 static const uint16_t SHOOT_MIN = 500;
 static const uint16_t SHOOT_STEP = 300;
 static const uint8_t NUM_ENEMIES = 6;
-static const uint8_t DESCENT_THRESHOLD = 3; // quantas batidas na borda até "alcançar" a linha do jogador
-static const uint8_t PROJ_LIFETIME = 2;     // ticks que um projétil fica visível antes de sumir sem acertar
+static const uint8_t PROJ_LIFETIME = ALTURA; // ticks até um projétil sumir sem acertar (dá tempo de "viajar" entre as linhas)
 
 enum InvadersState { INV_COUNTDOWN, INV_PLAYING, INV_OVER };
 
 static uint8_t enemyBitmask = 0x3F; // 6 bits, todos vivos
 static uint8_t groupCol = 4;
 static int8_t groupDir = 1;
-static uint8_t groupRow = 0; // 0 = linha dos inimigos, 1 = alcançou a nave
-static uint8_t descentBounces = 0;
+static uint8_t groupRow = 0; // linha atual dos inimigos (0 até ALTURA-1, onde ALTURA-1 é a linha da nave)
 
 static uint8_t shipCol = 7;
 
@@ -73,7 +71,7 @@ uint8_t invadersGetGroupRow() { return groupRow; }
 void invadersSetGroupRow(uint8_t row) { groupRow = row; }
 
 void invadersCheckDescent() {
-  if (groupRow >= 1 && !gameOver) {
+  if (groupRow >= ALTURA - 1 && !gameOver) {
     gameOver = true;
     playSound(SFX_INV_DEAD);
   }
@@ -153,7 +151,6 @@ static void startWave(bool isFirstWave) {
   groupCol = 4;
   groupDir = 1;
   groupRow = 0;
-  descentBounces = 0;
   playerProjActive = false;
   enemyProjActive = false;
 
@@ -179,10 +176,6 @@ void invadersResetForTest() {
   startWave(true);
 }
 
-// NOTA (Etapa 9a): a descida ainda usa o contador `descentBounces` (0/1) e
-// os inimigos/nave ficam fixos nas linhas 0/1 — a descida real por linha
-// (usando ALTURA inteiro) chega na Etapa 9d. Só o eixo horizontal já usa a
-// largura nova (LARGURA).
 static void moveGroup() {
   int newCol = (int)groupCol + groupDir;
   bool hitEdge = false;
@@ -198,10 +191,10 @@ static void moveGroup() {
 
   if (hitEdge) {
     groupDir = -groupDir;
-    descentBounces++;
-    if (descentBounces >= DESCENT_THRESHOLD) {
-      groupRow = 1;
-    }
+    // desce uma linha de verdade a cada batida na borda, até a penúltima
+    // linha — a última (ALTURA-1) é a linha da nave, e chegar nela é
+    // resolvido por invadersCheckDescent(), não aqui.
+    if (groupRow < ALTURA - 1) groupRow++;
   }
 }
 
@@ -311,18 +304,38 @@ void invadersUpdate(unsigned long now) {
   }
 }
 
+// Linha visual do projétil do jogador: começa logo acima da nave e sobe 1
+// linha por tick de idade, sem passar da linha atual dos inimigos. Puramente
+// cosmético — a colisão (invadersCheckPlayerCollision) já é resolvida só
+// pela coluna, não depende dessa linha.
+static uint8_t playerProjRow() {
+  int row = (int)(ALTURA - 2) - (int)playerProjAge;
+  if (row < (int)groupRow) row = groupRow;
+  if (row < 0) row = 0;
+  return (uint8_t)row;
+}
+
+// Linha visual do projétil inimigo: começa logo abaixo do grupo e desce 1
+// linha por tick de idade, sem passar da linha da nave.
+static uint8_t enemyProjRow() {
+  int row = (int)groupRow + 1 + (int)enemyProjAge;
+  if (row > ALTURA - 1) row = ALTURA - 1;
+  return (uint8_t)row;
+}
+
 void invadersDraw() {
   bool nowOccupied[LARGURA * ALTURA] = { false };
+  const uint8_t shipRow = ALTURA - 1;
 
   for (uint8_t i = 0; i < NUM_ENEMIES; i++) {
     if (invadersIsAlive(i)) {
       uint8_t col = groupCol + i;
-      nowOccupied[col * ALTURA + 0] = true;
+      nowOccupied[col * ALTURA + groupRow] = true;
     }
   }
-  nowOccupied[shipCol * ALTURA + 1] = true;
-  if (playerProjActive) nowOccupied[playerProjCol * ALTURA + 1] = true;
-  if (enemyProjActive) nowOccupied[enemyProjCol * ALTURA + 0] = true;
+  nowOccupied[shipCol * ALTURA + shipRow] = true;
+  if (playerProjActive) nowOccupied[playerProjCol * ALTURA + playerProjRow()] = true;
+  if (enemyProjActive) nowOccupied[enemyProjCol * ALTURA + enemyProjRow()] = true;
 
   for (uint8_t cell = 0; cell < LARGURA * ALTURA; cell++) {
     if (drawnCells[cell] && !nowOccupied[cell]) {
@@ -333,18 +346,18 @@ void invadersDraw() {
 
   for (uint8_t i = 0; i < NUM_ENEMIES; i++) {
     if (invadersIsAlive(i)) {
-      lcd.setCursor(groupCol + i, 0);
+      lcd.setCursor(groupCol + i, groupRow);
       lcd.write((uint8_t)4);
     }
   }
-  lcd.setCursor(shipCol, 1);
+  lcd.setCursor(shipCol, shipRow);
   lcd.write((uint8_t)3);
   if (playerProjActive) {
-    lcd.setCursor(playerProjCol, 1);
+    lcd.setCursor(playerProjCol, playerProjRow());
     lcd.write((uint8_t)5);
   }
   if (enemyProjActive) {
-    lcd.setCursor(enemyProjCol, 0);
+    lcd.setCursor(enemyProjCol, enemyProjRow());
     lcd.write((uint8_t)5);
   }
 

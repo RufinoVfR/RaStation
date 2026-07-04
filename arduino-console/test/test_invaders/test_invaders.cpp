@@ -104,7 +104,32 @@ void test_pontuacao_por_onda() {
 }
 
 void test_game_over_inimigos_chegam_linha_jogador() {
-  invadersSetGroupRow(1);
+  invadersSetGroupRow(ALTURA - 1); // última linha = linha da nave
+  invadersCheckDescent();
+  TEST_ASSERT_TRUE(invadersIsGameOver());
+}
+
+void test_grupo_desce_ao_bater_na_borda() {
+  advanceTime(4100);
+  invadersUpdate(millis()); // sai da contagem regressiva
+  TEST_ASSERT_EQUAL(0, invadersGetGroupRow());
+
+  // avança tempo suficiente pra garantir pelo menos uma batida na borda
+  // (o grupo começa no meio do campo se movendo pra direita)
+  for (int i = 0; i < 50 && !invadersIsGameOver(); i++) {
+    advanceTime(invadersGetMoveInterval());
+    invadersUpdate(millis());
+  }
+
+  TEST_ASSERT_TRUE(invadersGetGroupRow() >= 1);
+}
+
+void test_descida_nao_ultrapassa_limite_antes_da_nave() {
+  invadersSetGroupRow(ALTURA - 2); // penúltima linha
+  invadersCheckDescent();
+  TEST_ASSERT_FALSE(invadersIsGameOver()); // ainda não chegou na linha da nave
+
+  invadersSetGroupRow(ALTURA - 1);
   invadersCheckDescent();
   TEST_ASSERT_TRUE(invadersIsGameOver());
 }
@@ -156,6 +181,8 @@ int main() {
   RUN_TEST(test_velocidade_minima_respeitada);
   RUN_TEST(test_pontuacao_por_onda);
   RUN_TEST(test_game_over_inimigos_chegam_linha_jogador);
+  RUN_TEST(test_grupo_desce_ao_bater_na_borda);
+  RUN_TEST(test_descida_nao_ultrapassa_limite_antes_da_nave);
   RUN_TEST(test_integracao_onda_completa);
   RUN_TEST(test_integracao_tiro_e_acerto);
   RUN_TEST(test_integracao_tiro_inimigo_acerta_nave);
