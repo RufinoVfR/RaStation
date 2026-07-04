@@ -44,7 +44,7 @@ static uint8_t drawnCells[LARGURA * ALTURA];
 
 void pongResetBall() {
   ballX = (LARGURA - 1) / 2.0f;
-  ballY = 0.5f;
+  ballY = (ALTURA - 1) / 2.0f;
   velX = (random(0, 2) == 0) ? -0.4f : 0.4f;
   // magnitude sempre >= 0.3, nunca fica com velocidade vertical 0
   float mag = 0.3f + (random(0, 50) / 100.0f);
@@ -57,9 +57,17 @@ void pongResetForTest() {
   gameOver = false;
   winner = WINNER_NONE;
   speed = SPEED_INITIAL;
-  playerRow = 0;
-  cpuRow = 0;
+  playerRow = ALTURA / 2;
+  cpuRow = ALTURA / 2;
   pongResetBall();
+}
+
+// Linha da bola arredondada pra posição de barra mais próxima (0..ALTURA-1).
+static uint8_t computeBallRow() {
+  int r = (int)(ballY + 0.5f);
+  if (r < 0) r = 0;
+  if (r > ALTURA - 1) r = ALTURA - 1;
+  return (uint8_t)r;
 }
 
 float pongGetBallX() { return ballX; }
@@ -78,6 +86,11 @@ uint8_t pongGetPlayerRow() { return playerRow; }
 uint8_t pongGetCpuRow() { return cpuRow; }
 void pongSetPlayerRow(uint8_t row) { playerRow = row; }
 void pongSetCpuRow(uint8_t row) { cpuRow = row; }
+
+void pongMovePlayer(int8_t delta) {
+  if (delta < 0 && playerRow > 0) playerRow--;
+  else if (delta > 0 && playerRow < ALTURA - 1) playerRow++;
+}
 
 unsigned long pongGetSpeed() { return speed; }
 
@@ -108,10 +121,6 @@ void pongOnPointScored(Winner scorer) {
   }
 }
 
-// NOTA (Etapa 9a): o eixo vertical (ballY 0.0f/1.0f, playerRow/cpuRow 0/1)
-// continua só com 2 posições por enquanto — a barra com 4 posições reais
-// (usando ALTURA inteiro) chega na Etapa 9c. Só o eixo horizontal já usa a
-// largura nova (LARGURA), que não depende de nenhum empacotamento de bits.
 void pongStep() {
   ballX += velX;
   ballY += velY;
@@ -120,12 +129,12 @@ void pongStep() {
   if (ballY <= 0.0f) {
     ballY = 0.0f;
     if (velY < 0) { velY = -velY; playSound(SFX_PONG_WALL); }
-  } else if (ballY >= 1.0f) {
-    ballY = 1.0f;
+  } else if (ballY >= (float)(ALTURA - 1)) {
+    ballY = (float)(ALTURA - 1);
     if (velY > 0) { velY = -velY; playSound(SFX_PONG_WALL); }
   }
 
-  uint8_t ballRow = (ballY < 0.5f) ? 0 : 1;
+  uint8_t ballRow = computeBallRow();
 
   if (ballX <= 0.0f) {
     if (ballRow == playerRow) {
@@ -147,10 +156,18 @@ void pongStep() {
 }
 
 static void updateCpu() {
-  // reage com 70% de chance; os outros 30% do tempo mantém a posição
+  // reage com 70% de chance; os outros 30% do tempo mantém a posição.
+  // Move 1 linha por vez em direção à bola (não teleporta) — com 4
+  // posições possíveis, isso mantém a dificuldade razoável.
   if (random(0, 100) >= 30) {
-    cpuRow = (ballY < 0.5f) ? 0 : 1;
+    uint8_t targetRow = computeBallRow();
+    if (targetRow > cpuRow) cpuRow++;
+    else if (targetRow < cpuRow) cpuRow--;
   }
+}
+
+void pongUpdateCpuForTest() {
+  updateCpu();
 }
 
 static void createCustomChars() {
@@ -229,8 +246,8 @@ void pongUpdate(unsigned long now) {
 
   uint8_t evento = readButtons(now);
   switch (evento) {
-    case BTN_CIMA:  playerRow = 0; break;
-    case BTN_BAIXO: playerRow = 1; break;
+    case BTN_CIMA:  pongMovePlayer(-1); break;
+    case BTN_BAIXO: pongMovePlayer(1);  break;
     default: break;
   }
 
@@ -258,7 +275,7 @@ void pongDraw() {
   nowOccupied[(LARGURA - 1) * ALTURA + cpuRow] = true;
 
   uint8_t ballCol = (uint8_t)(ballX + 0.5f);
-  uint8_t ballRow = (ballY < 0.5f) ? 0 : 1;
+  uint8_t ballRow = computeBallRow();
   if (ballCol > LARGURA - 1) ballCol = LARGURA - 1;
   nowOccupied[ballCol * ALTURA + ballRow] = true;
 

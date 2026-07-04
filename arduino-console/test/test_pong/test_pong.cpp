@@ -17,7 +17,7 @@ void test_reflexao_vertical_borda_superior() {
 }
 
 void test_reflexao_vertical_borda_inferior() {
-  pongSetBall(7.5f, 0.95f, 0.4f, 0.3f); // perto da base, descendo
+  pongSetBall(7.5f, (float)(ALTURA - 1) - 0.05f, 0.4f, 0.3f); // perto da base, descendo
   pongStep();
   TEST_ASSERT_TRUE(pongGetVelY() < 0);
 }
@@ -83,6 +83,43 @@ void test_velocidade_minima_respeitada() {
   TEST_ASSERT_EQUAL(80, pongGetSpeed());
 }
 
+void test_rebate_em_cada_posicao_de_barra() {
+  for (uint8_t row = 0; row < ALTURA; row++) {
+    pongResetForTest();
+    pongSetPlayerRow(row);
+    // y calculado pra arredondar exatamente pra `row` em computeBallRow()
+    pongSetBall(0.05f, (float)row, -0.4f, 0.0f);
+    pongStep();
+    TEST_ASSERT_TRUE(pongGetVelX() > 0);
+    TEST_ASSERT_EQUAL(0, pongGetCpuScore());
+  }
+}
+
+void test_barra_nao_sai_do_limite_superior() {
+  pongSetPlayerRow(0);
+  pongMovePlayer(-1);
+  TEST_ASSERT_EQUAL(0, pongGetPlayerRow());
+}
+
+void test_barra_nao_sai_do_limite_inferior() {
+  pongSetPlayerRow(ALTURA - 1);
+  pongMovePlayer(1);
+  TEST_ASSERT_EQUAL(ALTURA - 1, pongGetPlayerRow());
+}
+
+void test_cpu_move_incrementalmente() {
+  pongSetCpuRow(0);
+  pongSetBall(10.0f, (float)(ALTURA - 1), 0.0f, 0.3f); // bola fixa na última linha
+
+  for (int i = 0; i < 30; i++) {
+    uint8_t before = pongGetCpuRow();
+    pongUpdateCpuForTest();
+    int delta = (int)pongGetCpuRow() - (int)before;
+    TEST_ASSERT_TRUE(delta >= -1 && delta <= 1); // nunca pula mais de 1 linha por vez
+  }
+  TEST_ASSERT_EQUAL(ALTURA - 1, pongGetCpuRow()); // com tempo suficiente, alcança a bola
+}
+
 void test_bola_nunca_velocidade_vertical_zero() {
   for (int i = 0; i < 1000; i++) {
     randomSeed(i);
@@ -141,6 +178,10 @@ int main() {
   RUN_TEST(test_fim_de_jogo_placar_5);
   RUN_TEST(test_velocidade_aumenta_a_cada_ponto);
   RUN_TEST(test_velocidade_minima_respeitada);
+  RUN_TEST(test_rebate_em_cada_posicao_de_barra);
+  RUN_TEST(test_barra_nao_sai_do_limite_superior);
+  RUN_TEST(test_barra_nao_sai_do_limite_inferior);
+  RUN_TEST(test_cpu_move_incrementalmente);
   RUN_TEST(test_bola_nunca_velocidade_vertical_zero);
   RUN_TEST(test_integracao_3_rebatidas);
   RUN_TEST(test_integracao_fim_de_jogo_5x0);

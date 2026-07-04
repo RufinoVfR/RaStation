@@ -27,10 +27,12 @@ float pongGetVelX();
 float pongGetVelY();
 void pongSetBall(float x, float y, float velX, float velY);
 
-uint8_t pongGetPlayerRow(); // 0 ou 1
+uint8_t pongGetPlayerRow(); // 0..ALTURA-1
 uint8_t pongGetCpuRow();
 void pongSetPlayerRow(uint8_t row);
 void pongSetCpuRow(uint8_t row);
+void pongUpdateCpuForTest(); // aplica um tick de reação da CPU isoladamente
+void pongMovePlayer(int8_t delta); // delta negativo = CIMA, positivo = BAIXO (com clamp)
 
 unsigned long pongGetSpeed();
 
