@@ -433,6 +433,20 @@ NÃO avançar para a próxima etapa com qualquer item em vermelho.
 | 6 — Invaders | 1.600 bytes | bitmask, tiro, ondas | 100% invaders lógica |
 | 7 — Som | 1.700 bytes | fila, overflow, interrupção | 100% sound.cpp |
 | 8 — Polish | 1.800 bytes | EEPROM, recorde, splash | 100% scores.cpp |
+| 9a — Infra 20x4 | 1.000 bytes | reteste dos 79 existentes nos novos limites | 100% regressão |
+| 9b — Snake 2D | 1.100 bytes | empacotamento, colisão vertical | 100% snake lógica |
+| 9c — Pong 4 linhas | 1.100 bytes | rebate por posição, limites de barra | 100% pong lógica |
+| 9d — Invaders descida | 1.100 bytes | descida real, game over por linha | 100% invaders lógica |
+| 9e — Boot logo | 1.100 bytes | cascata, pausa final, skip por botão | 100% menu.cpp (splash) |
+| 10 — Botão de pulo | 1.150 bytes | debounce isolado, sem interferir na prioridade | 100% input.cpp |
+| 11 — Flappy Bird | 1.400 bytes | gravidade, colisão, pontuação, EEPROM | 100% flappy lógica |
+| 12 — Auditoria pós-expansão | 1.800 bytes | suíte completa (79 + novos) | 100% regressão |
 
 > **Regra:** se a RAM ultrapassar o limite da etapa, **parar e otimizar**
 > antes de continuar. Não há margem de segurança acumulada.
+>
+> **Nota (Etapas 9-12):** o sensor PIR comprado pelo usuário ficou fora
+> deste lote de trabalho (sem como calibrar o módulo no momento). O Flappy
+> Bird (Etapa 11) nasce só com controle por botão dedicado; a leitura de
+> input do jogo é isolada o suficiente pra somar o PIR depois sem
+> retrabalho.

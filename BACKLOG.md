@@ -870,6 +870,491 @@ NÃO considerar o bônus completo com qualquer teste falhando.
 
 ---
 
+## ETAPA 9a — Migração de infraestrutura para display 20x4
+
+```
+Leia o CLAUDE.md, ELETRONICA.md e TESTES.md.
+
+O display do console vai trocar de 16x2 para 20x4. Atualize a infraestrutura
+compartilhada por todos os jogos e pelo menu (ainda sem redesenhar a
+jogabilidade de nenhum jogo — isso vem nas próximas sub-etapas).
+
+MUDANÇAS:
+1. include/config.h: LARGURA=20, ALTURA=4.
+2. Em src/games/snake.cpp, pong.cpp e invaders.cpp: o array `drawnCells[32]`
+   vira `drawnCells[LARGURA*ALTURA]` (80 posições), e toda fórmula de índice
+   `col*2+row` vira `col*ALTURA+row` (genérica, funciona pra qualquer ALTURA).
+   A leitura inversa (de índice pra col/row) também precisa generalizar:
+   `col = cell/ALTURA`, `row = cell%ALTURA`.
+3. Em src/menu.cpp: os buffers `char line[17]` viram `char line[LARGURA+1]`;
+   `memset(line,' ',16)` vira `memset(line,' ',LARGURA)`; a seta de fechamento
+   que hoje vai em `line[15]` vai pra `line[LARGURA-1]`. O formato de
+   `drawLine1()` (`"%-9.9s Hi:%-3d"`, hoje somando 16 caracteres) precisa ser
+   recalculado pra somar exatamente LARGURA caracteres (mantendo a mesma
+   ideia: descrição curta à esquerda, recorde à direita). As linhas 2 e 3 do
+   menu ficam sem uso por enquanto (não é erro, é intencional).
+4. Todas as telas de texto fixo (game over, "NOVO RECORDE!", contagens
+   regressivas dos jogos) continuam funcionando sem mudança de lógica — só
+   confira que nenhuma string estoura LARGURA caracteres.
+
+RESTRIÇÕES:
+- Não mexa ainda na lógica de movimento vertical de nenhum jogo (isso é
+  9b/9c/9d). Só a infraestrutura de tamanho de tela.
+- RAM alvo: < 1.000 bytes.
+
+Compile com `pio run -e uno`, rode os testes existentes (ajustando qualquer
+posição/coluna que dependa do tamanho antigo da tela nos arquivos de teste),
+e mostre RAM final antes de seguir.
+```
+
+### BANCO DE TESTES — Etapa 9a
+
+```
+ANÁLISE ESTÁTICA:
+[ ] bash test/static_analysis.sh — zero falhas
+[ ] pio run -e uno — RAM < 1.000 bytes
+
+TESTES UNITÁRIOS (Caixa Branca):
+[ ] Os 79 testes existentes (test_input, test_menu, test_snake, test_pong,
+    test_invaders, test_sound, test_scores) continuam passando depois de
+    ajustados para os novos limites de tela (ex.: testes de "parede direita"
+    que usavam coluna 15 passam a usar coluna 19).
+
+VERIFICAÇÕES ESTRUTURAIS:
+[ ] LARGURA == 20 e ALTURA == 4 em config.h
+[ ] drawnCells em snake.cpp, pong.cpp e invaders.cpp tem tamanho
+    LARGURA*ALTURA (80), não mais 32
+[ ] Nenhuma fórmula de índice de célula usa o literal "2" no lugar de ALTURA
+
+SIMULAÇÃO ASCII:
+[ ] Gerar e exibir o menu (linha 0 e linha 1) no LCD mockado de 20 colunas,
+    confirmando que a seta de fechamento aparece na coluna 19, não na 15
+
+NÃO avance para a Etapa 9b com qualquer item falhando.
+```
+
+---
+
+## ETAPA 9b — Snake em 2D de verdade
+
+```
+Leia o CLAUDE.md.
+
+Com a tela maior (4 linhas), o Snake deixa de só alternar entre 2 linhas fixas
+e passa a se mover livremente nas 4.
+
+MUDANÇAS em src/games/snake.cpp/snake.h:
+1. packPos/unpackCol/unpackRow: novo empacotamento de 1 byte com 5 bits de
+   coluna (bits 7-3, máximo 31) e 3 bits de linha (bits 2-0, máximo 7):
+     packPos(col,row)   = (col << 3) | (row & 0x07)
+     unpackCol(pos)     = pos >> 3
+     unpackRow(pos)     = pos & 0x07
+2. DIR_UP e DIR_DOWN deixam de alternar a linha (row = 1-row) e passam a
+   decrementar/incrementar de verdade: DIR_UP → row--, DIR_DOWN → row++.
+3. Colisão de parede passa a checar também o eixo vertical (hoje só existe
+   checagem de coluna 0/15): se row < 0 ou row >= ALTURA após o movimento,
+   é game over — igual já acontece com a coluna.
+
+Mantenha toda a API pública existente (snakePush, snakeMoveStep,
+snakeSetDirection, snakeForceDirection, snakeOnFoodEaten, etc.) com a mesma
+assinatura — só a lógica interna de linha muda.
+
+RAM alvo: < 1.100 bytes (acumulado da Etapa 9 inteira).
+```
+
+### BANCO DE TESTES — Etapa 9b
+
+```
+ANÁLISE ESTÁTICA:
+[ ] bash test/static_analysis.sh — zero falhas
+[ ] pio run -e uno — RAM < 1.100 bytes
+
+TESTES UNITÁRIOS — atualizar test/test_snake/test_snake.cpp:
+[ ] pack_unpack_com_coluna_19: packPos(19,3) → unpackCol()==19 e
+    unpackRow()==3 (confirma que o novo empacotamento não estoura)
+[ ] colisao_parede_superior: cobra na linha 0, direção CIMA, update()
+    resultado: isGameOver()==true
+[ ] colisao_parede_inferior: cobra na linha ALTURA-1, direção BAIXO,
+    update() resultado: isGameOver()==true
+[ ] movimento_vertical_real: cobra na linha 1, direção CIMA, update()
+    resultado: cabeça agora na linha 0 (não mais "alternando" pra 1-0=1)
+[ ] Todos os testes de colisão horizontal, buffer circular e crescimento já
+    existentes continuam passando sem alteração de comportamento
+
+NÃO avance para a Etapa 9c com qualquer teste falhando.
+```
+
+---
+
+## ETAPA 9c — Pong com 4 posições de barra
+
+```
+Leia o CLAUDE.md.
+
+Com 4 linhas disponíveis, as barras do Pong deixam de "teleportar" entre 2
+posições fixas e passam a se mover incrementalmente entre 4.
+
+MUDANÇAS em src/games/pong.cpp/pong.h:
+1. playerRow/cpuRow passam a variar de 0 a ALTURA-1 (não mais só 0/1).
+2. CIMA/BAIXO do jogador: em vez de "playerRow = 0" / "playerRow = 1", vira
+   "playerRow = max(0, playerRow-1)" / "playerRow = min(ALTURA-1, playerRow+1)".
+3. A bola (ballY, float) rebate no topo/base usando 0.0f e (float)(ALTURA-1)
+   como limites (hoje usa 0.0f e 1.0f). A checagem de colisão com barra passa
+   a comparar a linha arredondada da bola contra a posição atual da barra
+   (que agora tem ALTURA valores possíveis, não 2).
+4. A CPU: em vez de teleportar direto pra linha da bola, passa a mover 1
+   linha por vez em direção a ela, mantendo a mesma chance de reação de 70%
+   por tick (cpuRow += (ballRow > cpuRow) ? 1 : (ballRow < cpuRow ? -1 : 0),
+   só quando "decidir reagir" naquele tick).
+
+Mantenha a API pública (pongStep, pongOnPointScored, pongSetPlayerRow, etc.)
+com a mesma assinatura.
+
+RAM alvo: < 1.100 bytes (acumulado da Etapa 9 inteira).
+```
+
+### BANCO DE TESTES — Etapa 9c
+
+```
+ANÁLISE ESTÁTICA:
+[ ] bash test/static_analysis.sh — zero falhas
+[ ] pio run -e uno — RAM < 1.100 bytes
+
+TESTES UNITÁRIOS — atualizar test/test_pong/test_pong.cpp:
+[ ] rebate_em_cada_posicao_de_barra: testar rebote com a barra em linha 0,
+    1, 2 e 3 (as 4 posições possíveis), cada uma rebatendo corretamente
+[ ] barra_nao_sai_do_limite_superior: playerRow=0, CIMA → continua em 0
+[ ] barra_nao_sai_do_limite_inferior: playerRow=ALTURA-1, BAIXO → continua
+    em ALTURA-1
+[ ] cpu_move_incrementalmente: cpuRow=0, bola na linha 3, um tick de reação
+    → cpuRow==1 (não pula direto pra 3)
+[ ] Todos os testes de reflexão de topo/base, ponto marcado e velocidade já
+    existentes continuam passando
+
+NÃO avance para a Etapa 9d com qualquer teste falhando.
+```
+
+---
+
+## ETAPA 9d — Space Invaders com descida real
+
+```
+Leia o CLAUDE.md.
+
+Com 4 linhas disponíveis, o Invaders deixa de simular "os inimigos alcançarem
+a linha do jogador" com um contador abstrato de batidas na borda, e passa a
+ter descida vertical de verdade.
+
+MUDANÇAS em src/games/invaders.cpp/invaders.h:
+1. Troca o contador `descentBounces`/`DESCENT_THRESHOLD` por um `groupRow`
+   real: a cada vez que o grupo bate numa borda lateral e inverte direção,
+   `groupRow++` (limitado a ALTURA-2, já que a última linha, ALTURA-1, é da
+   nave).
+2. Ao `groupRow` alcançar ALTURA-1 (linha da nave) → game over, exatamente
+   como já acontece hoje (`invadersCheckDescent()`), só que baseado numa
+   posição real de linha, não num contador abstrato.
+3. Nave fixa na última linha (ALTURA-1). Inimigos desenhados na linha
+   `groupRow`. Projétil do jogador sobe de ALTURA-1 até groupRow; projétil
+   inimigo desce de groupRow até ALTURA-1 (puramente visual — a colisão já é
+   resolvida por coluna, sem precisar simular o trajeto vertical quadro a
+   quadro).
+
+Mantenha a API pública (invadersKillEnemy, invadersCheckPlayerCollision,
+invadersAdvanceWave, invadersSetGroupRow, invadersCheckDescent, etc.) com a
+mesma assinatura.
+
+RAM alvo: < 1.100 bytes (acumulado da Etapa 9 inteira).
+```
+
+### BANCO DE TESTES — Etapa 9d
+
+```
+ANÁLISE ESTÁTICA:
+[ ] bash test/static_analysis.sh — zero falhas
+[ ] pio run -e uno — RAM < 1.100 bytes
+
+TESTES UNITÁRIOS — atualizar test/test_invaders/test_invaders.cpp:
+[ ] grupo_desce_ao_bater_na_borda: groupRow==0, grupo bate na borda lateral
+    → groupRow==1
+[ ] descida_nao_ultrapassa_limite_antes_da_nave: forçar várias batidas na
+    borda → groupRow nunca passa de ALTURA-2 sem disparar game over antes
+[ ] game_over_ao_alcancar_linha_da_nave: groupRow==ALTURA-1 →
+    invadersCheckDescent() → isGameOver()==true (mesmo teste de antes,
+    agora validando com a linha real em vez do contador)
+[ ] Todos os testes de bitmask, colisão de projétil, onda e pontuação já
+    existentes continuam passando
+
+NÃO avance para a Etapa 9e com qualquer teste falhando.
+```
+
+---
+
+## ETAPA 9e — Boot logo animado "RaStation"
+
+```
+Leia o CLAUDE.md.
+
+Substitua a splash atual do menu (estado MENU_SPLASH, que hoje digita
+"ARCADE" letra a letra e pisca 3 vezes) por um boot logo animado no estilo
+das telas de inicialização de PlayStation/Xbox: as 9 letras de "RaStation"
+caem e assentam no meio da tela, com um som animado no buzzer.
+
+COMPORTAMENTO:
+1. Layout: "RaStation" (R-a-S-t-a-t-i-o-n) centralizado horizontalmente em
+   20 colunas (começa na coluna 5). Linha de destino: 1.
+2. Cada letra começa "escondida" (linha 0) e cai numa sequência curta de
+   linhas com um leve solavanco ao assentar — ex.: linha 0 → linha 2 →
+   linha 1 (destino) — trocando de linha a cada ~100ms.
+3. Cascata: cada letra começa a cair ~120ms depois da anterior (não todas
+   simultaneamente).
+4. Som: cada letra que assenta na posição final dispara um "blip" curto e
+   não-bloqueante direto no buzzer (chamada direta a tone(), sem passar
+   pela fila de sound.h — isso precisa estar sincronizado exatamente com o
+   instante em que cada letra assenta), com a frequência subindo um pouco
+   a cada letra (efeito de arpejo crescente).
+5. Depois que a última letra assenta: pausa de 1-2s parada, e só então
+   segue pro menu.
+6. Apertar qualquer botão a qualquer momento pula direto pro menu (igual ao
+   comportamento da splash "ARCADE" que está sendo substituída).
+
+Tudo baseado em millis(), sem nenhum delay(). Reaproveite o mesmo padrão de
+"avançar em passos fixos" já usado na animação de digitação do menu (evita
+saltar direto pro `now` quando o loop atrasa um tick).
+
+RAM alvo: < 1.100 bytes (acumulado da Etapa 9 inteira).
+```
+
+### BANCO DE TESTES — Etapa 9e
+
+```
+ANÁLISE ESTÁTICA:
+[ ] bash test/static_analysis.sh — zero falhas
+[ ] pio run -e uno — RAM < 1.100 bytes
+
+TESTES UNITÁRIOS — atualizar test/test_menu/test_menu.cpp:
+[ ] letra_avanca_de_linha_no_instante_certo: uma letra específica troca de
+    linha exatamente quando o tempo do passo é atingido, não antes
+[ ] cascata_respeita_atraso_entre_letras: a segunda letra só começa a cair
+    depois do atraso configurado em relação à primeira
+[ ] pausa_final_antes_do_menu: depois da última letra assentar, o menu só
+    libera após a pausa de 1-2s configurada
+[ ] qualquer_botao_pula_a_animacao: em qualquer ponto da queda das letras,
+    apertar um botão faz menuUpdate() ir direto pro menu normal (mesmo
+    teste que já existia pra splash "ARCADE", adaptado pra nova tela)
+
+SIMULAÇÃO ASCII:
+[ ] Gerar e exibir 3-4 quadros da animação de queda no LCD mockado,
+    mostrando as letras em posições diferentes ao longo da cascata
+
+NÃO avance para a Etapa 10 com qualquer teste falhando.
+```
+
+---
+
+## ETAPA 10 — Novo input: botão de pulo dedicado
+
+```
+Leia o CLAUDE.md e ELETRONICA.md.
+
+Adicione um 5º botão físico, dedicado ao pulo do Flappy Bird (o sensor PIR
+fica de fora deste lote de trabalho — ver observação no fim da etapa).
+
+ELETRÔNICA:
+- Botão de pulo no pino D2, mesmo circuito pull-down dos outros 4 botões
+  (5V → botão → D2 → resistor 10kΩ → GND). Botão solto = LOW, pressionado
+  = HIGH — mesma convenção dos outros 4.
+
+SOFTWARE:
+1. include/config.h: novo `#define BTN_PULAR 2`.
+2. src/input.h/input.cpp: nova função `bool readJumpButton(unsigned long now)`
+   com debounce de 50ms, seguindo exatamente o mesmo padrão de
+   `updatePressed()` já usado pros outros 4 botões — evento único por
+   aperto, não repete enquanto segurado. Essa função é separada de
+   `readButtons()` (o botão de pulo não participa da prioridade
+   ESQ/DIR/CIMA/BAIXO, é específico do Flappy Bird, que ainda não existe
+   nesta etapa — só prepare a leitura).
+
+OBSERVAÇÃO IMPORTANTE: o sensor PIR comprado pelo usuário fica de fora
+deste lote (não há como calibrar o tempo de retenção do módulo agora). Não
+implemente nada relacionado ao PIR nesta etapa — só documente em
+ELETRONICA.md que ele está reservado para uma etapa futura, e garanta que
+`readJumpButton()` seja uma função isolada o suficiente pra, no futuro,
+somar uma segunda fonte de "pulo" sem precisar reescrever nada.
+
+RAM alvo: < 1.150 bytes.
+```
+
+### BANCO DE TESTES — Etapa 10
+
+```
+ANÁLISE ESTÁTICA:
+[ ] bash test/static_analysis.sh — zero falhas
+[ ] pio run -e uno — RAM < 1.150 bytes
+
+TESTES UNITÁRIOS — adicionar em test/test_input/test_input.cpp:
+[ ] jump_button_debounce_ignora_transicao_rapida: setPin(BTN_PULAR, HIGH) →
+    advanceTime(30ms) → readJumpButton() resultado esperado: false
+[ ] jump_button_debounce_detecta_apos_50ms: setPin(BTN_PULAR, HIGH) →
+    advanceTime(60ms) → readJumpButton() resultado esperado: true
+[ ] jump_button_nao_repete_holding: setPin(BTN_PULAR, HIGH) →
+    advanceTime(100ms) → readJumpButton() × 2 — resultado: true na primeira
+    chamada, false na segunda
+[ ] jump_button_nao_interfere_na_prioridade_existente: pressionar
+    BTN_PULAR e BTN_CIMA ao mesmo tempo → readButtons() ainda retorna
+    BTN_CIMA normalmente, e readJumpButton() retorna o evento do pulo
+    independentemente
+
+NÃO avance para a Etapa 11 com qualquer teste falhando.
+```
+
+---
+
+## ETAPA 11 — Jogo Flappy Bird
+
+```
+Leia o CLAUDE.md e ELETRONICA.md.
+
+Implemente um 4º jogo em src/games/flappy.h/flappy.cpp, seguindo exatamente
+o mesmo padrão arquitetural do Snake/Pong/Invaders (funções livres
+testáveis, PROGMEM pros custom chars, millis() pra tudo, zero delay()).
+
+MECÂNICAS:
+- Jogador: uma "bola" numa coluna fixa (ex.: coluna 2), com posição vertical
+  contínua (float playerY) e velocidade vertical (float playerVelY).
+- Gravidade: playerVelY += GRAVITY a cada tick de física (com limite de
+  velocidade de queda, MAX_FALL_SPEED).
+- Pulo: ao detectar o evento de pulo (botão dedicado), playerVelY assume um
+  valor fixo negativo (JUMP_VELOCITY) — um impulso instantâneo pra cima,
+  independente da velocidade atual, igual Flappy Bird de verdade.
+- Colisão com teto (playerY <= 0) ou chão (playerY >= ALTURA-1) = game over
+  imediato (não é só um clamp).
+- Canos: array fixo de até 3 (`struct Pipe { float x; uint8_t gapStart;
+  bool active; bool scored; }`), avançando da direita pra esquerda a cada
+  tick. O vão (gap) tem 2 linhas livres de ALTURA (4) — 3 posições possíveis
+  de vão (gapStart 0, 1 ou 2), sorteada aleatoriamente por cano. Cano que
+  sai da tela pela esquerda reaparece na direita com nova posição de vão.
+- Colisão com cano: se a coluna do cano coincide com a coluna do jogador e a
+  linha do jogador não está dentro do vão → game over.
+- Pontuação: +1 ao ultrapassar um cano sem colidir.
+- Dificuldade: a cada 5 canos ultrapassados, o intervalo de tick da física
+  diminui (mesmo padrão de "reduz e trava num piso" do Snake/Pong/Invaders).
+- Controle: só pelo botão de pulo dedicado (D2) por enquanto (sem PIR nesta
+  etapa). A leitura de input do jogo fica isolada numa função própria
+  (ex.: checkJump()), preparada pra somar uma segunda fonte no futuro sem
+  reescrever a lógica do jogo.
+- Contagem regressiva "3-2-1-GO!" antes de liberar o controle, igual aos
+  outros 3 jogos.
+
+CUSTOM CHARACTERS:
+- Um slot pra bola do jogador (círculo/redondo), outro pro cano (bloco
+  sólido quadrado, similar ao já usado no corpo do Snake).
+
+API TESTÁVEL (mesmo estilo de snakeMoveStep()/pongStep()):
+  flappyInit(), flappyUpdate(now), flappyDraw(), flappyIsGameOver(),
+  flappyGetScore(), flappyResetForTest(), flappyStep() (física isolada, sem
+  input/timing/countdown), flappyJump(), flappyGetPlayerY(),
+  flappyGetPlayerVelY(), flappySetPlayer(y, velY), getters/setters de cada
+  cano (coluna, início do vão, ativo, já pontuado), flappyOnPipePassed()
+  (efeitos de pontuar — score++, velocidade sobe — separado do step pra
+  testar o acúmulo de velocidade sem precisar simular dezenas de canos,
+  mesmo motivo do snakeOnFoodEaten()/pongOnPointScored()).
+
+INTEGRAÇÃO:
+- include/config.h: novo STATE_FLAPPY no enum GameState.
+- src/scores.h/scores.cpp: novo GAME_FLAPPY no enum GameType. Realoque os
+  endereços da EEPROM: Snake 0-1, Pong 2-3, Invaders 4-5, Flappy 6-7, byte
+  de validação move de 6 pra 8 (mantenha o padrão int16_t, não int).
+- src/menu.cpp: 4ª entrada em GAMES[] (nome "FLAPPY", descrição curta tipo
+  "Voa").
+- src/main.cpp: novo case STATE_FLAPPY chamando flappyUpdate(), e
+  flappyInit() ao confirmar esse jogo no menu.
+
+RAM alvo: < 1.400 bytes.
+```
+
+### BANCO DE TESTES — Etapa 11
+
+```
+ANÁLISE ESTÁTICA:
+[ ] bash test/static_analysis.sh — zero falhas
+[ ] pio run -e uno — RAM < 1.400 bytes
+
+TESTES UNITÁRIOS — criar test/test_flappy/test_flappy.cpp:
+[ ] gravidade_aplicada_a_cada_tick: playerVelY aumenta em GRAVITY após um
+    flappyStep() sem pulo
+[ ] pulo_aplica_impulso_fixo: flappyJump() → playerVelY == JUMP_VELOCITY,
+    independente do valor anterior
+[ ] colisao_com_cano_fora_do_vao: cano na coluna do jogador, gapStart não
+    inclui a linha atual do jogador → flappyStep() → isGameOver()==true
+[ ] sem_colisao_dentro_do_vao: cano na coluna do jogador, jogador dentro do
+    vão → flappyStep() → isGameOver()==false
+[ ] colisao_com_teto: playerY<=0 → flappyStep() → isGameOver()==true
+[ ] colisao_com_chao: playerY>=ALTURA-1 → flappyStep() → isGameOver()==true
+[ ] pontuacao_ao_ultrapassar_cano: cano ultrapassa a coluna do jogador sem
+    colidir → getScore() aumenta em 1
+[ ] velocidade_aumenta_a_cada_5_canos: forçar 5 flappyOnPipePassed() →
+    intervalo de tick diminui; forçar muitos mais → intervalo não passa do
+    piso configurado
+[ ] cano_reaparece_do_outro_lado: cano sai da tela pela esquerda → nova
+    posição na direita com novo gapStart sorteado
+
+TESTES DE INTEGRAÇÃO (Caixa Preta):
+[ ] Simular partida completa via flappyUpdate() por vários ticks sem pulo
+    algum → jogador cai e eventualmente bate no chão (game over natural)
+[ ] Simular ciclo de recorde: pontuar, game over, salvar, recarregar →
+    menu exibe o recorde do Flappy Bird (mesmo teste já existente pros
+    outros 3 jogos, agora cobrindo GAME_FLAPPY)
+
+NÃO avance para a Etapa 12 com qualquer teste falhando.
+```
+
+---
+
+## ETAPA 12 — Auditoria final pós-expansão
+
+```
+Leia o CLAUDE.md.
+
+Faça a auditoria final depois de toda a expansão (display 20x4, botão de
+pulo, Flappy Bird):
+
+1. Recompile tudo (pio run -e uno) e rode a suíte de testes inteira
+   (pio test -e native) — deve incluir os 79 testes originais mais todos os
+   novos das Etapas 9-11.
+2. Confirme zero delay()/String em qualquer arquivo, zero warnings de
+   compilação.
+3. Atualize a seção "Estado final do projeto" do CLAUDE.md com o novo
+   relatório (RAM, Flash, contagem de testes, funcionalidades, limitações
+   conhecidas — incluindo que o PIR ficou de fora deste lote e fica
+   reservado pra uma etapa futura).
+4. Atualize a tabela "Política de Qualidade por Etapa" do TESTES.md
+   incluindo as Etapas 9-12.
+
+Entregue o relatório final no mesmo formato usado ao final da Etapa 8.
+```
+
+### BANCO DE TESTES — Etapa 12
+
+```
+AUDITORIA FINAL AUTOMATIZADA:
+[ ] bash test/static_analysis.sh — zero falhas em todo o projeto
+[ ] grep -rn "delay\|String\b" src/ — nenhum resultado (fora de comentários)
+[ ] pio run -e uno 2>&1 | grep "RAM:" — exibir uso final
+[ ] pio test -e native — TODOS os testes de todas as etapas passando
+
+RELATÓRIO FINAL:
+Ao terminar, gere um resumo no formato:
+  RAM usada: XXX / 2048 bytes (XX%)
+  Flash usado: XXXXX / 32256 bytes (XX%)
+  Total de testes: XX passando, 0 falhando
+  Funcionalidades: [lista]
+  Limitações conhecidas: [lista, incluindo PIR reservado pro futuro]
+
+NÃO considerar a expansão concluída com qualquer item falhando.
+```
+
+---
+
 > **Como usar este backlog:**
 > 1. Coloque CLAUDE.md, ELETRONICA.md, TESTES.md e BACKLOG.md na raiz do projeto
 > 2. Abra o Claude Code na pasta `arduino-console/`
