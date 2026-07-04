@@ -40,10 +40,10 @@ static PongState pongState = PONG_COUNTDOWN;
 static unsigned long countdownStart = 0;
 static uint8_t countdownLastStep = 255;
 
-static uint8_t drawnCells[32];
+static uint8_t drawnCells[LARGURA * ALTURA];
 
 void pongResetBall() {
-  ballX = 7.5f;
+  ballX = (LARGURA - 1) / 2.0f;
   ballY = 0.5f;
   velX = (random(0, 2) == 0) ? -0.4f : 0.4f;
   // magnitude sempre >= 0.3, nunca fica com velocidade vertical 0
@@ -108,6 +108,10 @@ void pongOnPointScored(Winner scorer) {
   }
 }
 
+// NOTA (Etapa 9a): o eixo vertical (ballY 0.0f/1.0f, playerRow/cpuRow 0/1)
+// continua só com 2 posições por enquanto — a barra com 4 posições reais
+// (usando ALTURA inteiro) chega na Etapa 9c. Só o eixo horizontal já usa a
+// largura nova (LARGURA), que não depende de nenhum empacotamento de bits.
 void pongStep() {
   ballX += velX;
   ballY += velY;
@@ -131,9 +135,9 @@ void pongStep() {
     } else {
       pongOnPointScored(WINNER_CPU); // saiu pela esquerda
     }
-  } else if (ballX >= 15.0f) {
+  } else if (ballX >= (float)(LARGURA - 1)) {
     if (ballRow == cpuRow) {
-      ballX = 15.0f;
+      ballX = (float)(LARGURA - 1);
       if (velX > 0) velX = -velX; // rebate
       playSound(SFX_PONG_HIT);
     } else {
@@ -170,7 +174,7 @@ void pongInit() {
   countdownStart = millis();
   countdownLastStep = 255;
 
-  for (uint8_t i = 0; i < 32; i++) drawnCells[i] = 0;
+  for (uint8_t i = 0; i < LARGURA * ALTURA; i++) drawnCells[i] = 0;
   lcd.clear();
 }
 
@@ -188,9 +192,9 @@ static void drawCountdown(uint8_t step) {
 static void drawPointFlash() {
   lcd.clear();
   lcd.setCursor(0, 0);
-  lcd.print(F("     PONTO!     "));
-  char line[17];
-  snprintf(line, sizeof(line), "    %d  x  %d    ", playerScore, cpuScore);
+  lcd.print(F("       PONTO!       "));
+  char line[LARGURA + 1];
+  snprintf(line, sizeof(line), "      %d  x  %d      ", playerScore, cpuScore);
   lcd.setCursor(0, 1);
   lcd.print(line);
 }
@@ -217,7 +221,7 @@ void pongUpdate(unsigned long now) {
     if (now - pointFlashStart >= POINT_FLASH_MS) {
       pongState = PONG_PLAYING;
       lcd.clear();
-      for (uint8_t i = 0; i < 32; i++) drawnCells[i] = 0;
+      for (uint8_t i = 0; i < LARGURA * ALTURA; i++) drawnCells[i] = 0;
       pongDraw();
     }
     return;
@@ -248,29 +252,29 @@ void pongUpdate(unsigned long now) {
 }
 
 void pongDraw() {
-  bool nowOccupied[32] = { false };
+  bool nowOccupied[LARGURA * ALTURA] = { false };
 
-  nowOccupied[0 * 2 + playerRow] = true;
-  nowOccupied[15 * 2 + cpuRow] = true;
+  nowOccupied[0 * ALTURA + playerRow] = true;
+  nowOccupied[(LARGURA - 1) * ALTURA + cpuRow] = true;
 
   uint8_t ballCol = (uint8_t)(ballX + 0.5f);
   uint8_t ballRow = (ballY < 0.5f) ? 0 : 1;
-  if (ballCol > 15) ballCol = 15;
-  nowOccupied[ballCol * 2 + ballRow] = true;
+  if (ballCol > LARGURA - 1) ballCol = LARGURA - 1;
+  nowOccupied[ballCol * ALTURA + ballRow] = true;
 
-  for (uint8_t cell = 0; cell < 32; cell++) {
+  for (uint8_t cell = 0; cell < LARGURA * ALTURA; cell++) {
     if (drawnCells[cell] && !nowOccupied[cell]) {
-      lcd.setCursor(cell / 2, cell % 2);
+      lcd.setCursor(cell / ALTURA, cell % ALTURA);
       lcd.print(F(" "));
     }
   }
 
   lcd.setCursor(0, playerRow);
   lcd.write((uint8_t)5);
-  lcd.setCursor(15, cpuRow);
+  lcd.setCursor(LARGURA - 1, cpuRow);
   lcd.write((uint8_t)5);
   lcd.setCursor(ballCol, ballRow);
   lcd.write((uint8_t)6);
 
-  for (uint8_t cell = 0; cell < 32; cell++) drawnCells[cell] = nowOccupied[cell];
+  for (uint8_t cell = 0; cell < LARGURA * ALTURA; cell++) drawnCells[cell] = nowOccupied[cell];
 }

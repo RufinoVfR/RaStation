@@ -32,7 +32,7 @@ void test_reflexao_horizontal_barra_jogador() {
 
 void test_reflexao_horizontal_barra_cpu() {
   pongSetCpuRow(1);
-  pongSetBall(14.9f, 0.7f, 0.4f, 0.1f); // perto de x=15, indo pra direita, linha 1
+  pongSetBall((float)(LARGURA - 1) - 0.1f, 0.7f, 0.4f, 0.1f); // perto da borda direita, linha 1
   pongStep();
   TEST_ASSERT_TRUE(pongGetVelX() < 0);
   TEST_ASSERT_EQUAL(0, pongGetPlayerScore());
@@ -46,18 +46,18 @@ void test_ponto_para_cpu_bola_sai_esquerda() {
   pongStep();
 
   TEST_ASSERT_EQUAL(before + 1, pongGetCpuScore());
-  TEST_ASSERT_FLOAT_WITHIN(0.01f, 7.5f, pongGetBallX());
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, (LARGURA - 1) / 2.0f, pongGetBallX());
 }
 
 void test_ponto_para_jogador_bola_sai_direita() {
   pongSetCpuRow(1); // não bate com a linha da bola
-  pongSetBall(15.5f, 0.2f, 0.4f, 0.1f);
+  pongSetBall((float)(LARGURA - 1) + 0.5f, 0.2f, 0.4f, 0.1f);
   int before = pongGetPlayerScore();
 
   pongStep();
 
   TEST_ASSERT_EQUAL(before + 1, pongGetPlayerScore());
-  TEST_ASSERT_FLOAT_WITHIN(0.01f, 7.5f, pongGetBallX());
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, (LARGURA - 1) / 2.0f, pongGetBallX());
 }
 
 void test_fim_de_jogo_placar_5() {
@@ -65,7 +65,7 @@ void test_fim_de_jogo_placar_5() {
   TEST_ASSERT_EQUAL(4, pongGetPlayerScore());
 
   pongSetCpuRow(1); // não bate, bola sai pela direita = ponto do jogador
-  pongSetBall(15.5f, 0.2f, 0.4f, 0.1f);
+  pongSetBall((float)(LARGURA - 1) + 0.5f, 0.2f, 0.4f, 0.1f);
   pongStep();
 
   TEST_ASSERT_TRUE(pongIsGameOver());
@@ -102,7 +102,7 @@ void test_integracao_3_rebatidas() {
   TEST_ASSERT_TRUE(pongGetVelY() > 0);
 
   pongSetCpuRow(1);
-  pongSetBall(14.9f, 0.7f, 0.4f, 0.2f);
+  pongSetBall((float)(LARGURA - 1) - 0.1f, 0.7f, 0.4f, 0.2f);
   pongStep();
   TEST_ASSERT_TRUE(pongGetVelX() < 0);
 

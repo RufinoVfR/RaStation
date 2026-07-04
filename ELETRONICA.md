@@ -516,3 +516,78 @@ Resolver o problema de hardware primeiro.
 | Buzzer não emite som | `digitalWrite()` em vez de `tone()` | Usar `tone(10, frequencia)` |
 | Arduino reinicia sozinho | RAM estourada | Verificar uso de memória com `pio run` |
 | Caracteres estranhos no LCD | `String` fragmentando heap | Substituir por `char[]` + `F()` |
+
+---
+
+## 13. Upgrade: Display 20x4 e botão de pulo (Etapas 9-10)
+
+### 13.1 Trocando o LCD 16x2 pelo 20x4
+
+O display novo é HD44780-compatível, mesma interface paralela de 4 bits do
+LCD antigo — a pinagem lógica **não muda**: RS, EN, D4-D7, mais VSS/VDD/V0
+(contraste) e backlight A/K. Só tem mais colunas (20 em vez de 16) e mais
+linhas (4 em vez de 2). Reaproveite exatamente os mesmos pinos do Arduino
+já em uso (A0-A5) e o mesmo potenciômetro de contraste.
+
+### 13.2 Display sem pinos soldados — conexão sem solda
+
+Muitos LCDs vêm sem os pinos (headers) soldados — só furos com uma argola
+de cobre exposta ao redor. Se você não tem ferro de solda nem barra de
+pinos disponível, dá pra conectar assim (menos confiável que solda, mas
+funciona):
+
+1. Use um fio de núcleo sólido (os jumpers macho-macho comuns servem).
+2. Enfie a ponta do fio no furo e empurre até atravessar (o furo é
+   passante, vai de um lado ao outro da placa).
+3. Do lado de trás da placa, dobre essa ponta sobre o cobre ao redor do
+   furo, tipo um gancho pequeno, encostando bem na argola — não deixe a
+   ponta reta e solta, o contato precisa vir da pressão da dobra contra o
+   cobre.
+4. Prenda essa dobra com fita isolante por cima, pressionando o fio contra
+   a placa, pra não afrouxar com vibração.
+5. Repita pra cada um dos 6 fios de dados/controle (RS, EN, D4-D7) e pros
+   4 de alimentação/contraste/backlight (VSS, VDD, V0, A, K) — 10 conexões
+   no total.
+6. Puxe de leve cada fio pra conferir que não sai do furo antes de fechar
+   tudo.
+
+**Isso é menos confiável que solda de verdade.** Se depois de montado a
+tela ficar instável (piscando, apagando, mostrando quadrados sólidos — o
+mesmo sintoma que já tivemos com o LCD antigo), o primeiro suspeito são
+esses 6 contatos de dados/controle, não o código.
+
+### 13.3 Gotcha conhecido: endereçamento das linhas 3 e 4
+
+No HD44780, o endereço de memória (DDRAM) de cada linha não é sequencial:
+linha 1 começa no endereço 0x00, linha 2 no 0x40, linha 3 no 0x14, linha 4
+no 0x54 (para um display de 20 colunas). Isso é conhecido por confundir
+gente que tenta endereçar a tela manualmente — mas a biblioteca
+`LiquidCrystal` já calcula esses offsets sozinha a partir do número de
+colunas passado pra `lcd.begin(20, 4)`, então **não é um problema de
+código**, só uma curiosidade pra não estranhar se pesquisar sobre o
+assunto.
+
+### 13.4 Botão de pulo dedicado (Etapa 10)
+
+Mesmo circuito pull-down dos outros 4 botões, só que no pino **D2** (livre
+desde que o LCD foi remapeado pros pinos A0-A5):
+
+```
+5V → [botão de pulo] → D2
+                         |
+                      10kΩ
+                         |
+                       GND
+```
+
+Botão solto = LOW, pressionado = HIGH — mesma convenção dos outros 4.
+
+### 13.5 Sensor PIR — reservado para o futuro
+
+O sensor PIR comprado junto com essas peças **não foi instalado nesta
+leva de trabalho** — módulos desse tipo (ex.: HC-SR501) têm dois trimpots
+de ajuste (sensibilidade e tempo de retenção do sinal), e sem poder
+calibrar isso agora, o pulo por movimento ficaria pouco responsivo. Fica
+documentado aqui como pendência: quando for integrar, a pinagem sugerida é
+VCC→5V, GND→GND, OUT→ um pino digital livre (ex. D3), e vale a pena girar
+o trimpot de tempo pro mínimo antes de testar no jogo.

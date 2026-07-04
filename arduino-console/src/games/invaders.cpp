@@ -45,7 +45,7 @@ static InvadersState invState = INV_COUNTDOWN;
 static unsigned long countdownStart = 0;
 static uint8_t countdownLastStep = 255;
 
-static uint8_t drawnCells[32];
+static uint8_t drawnCells[LARGURA * ALTURA];
 
 bool invadersIsAlive(uint8_t index) {
   return (enemyBitmask >> index) & 0x01;
@@ -179,6 +179,10 @@ void invadersResetForTest() {
   startWave(true);
 }
 
+// NOTA (Etapa 9a): a descida ainda usa o contador `descentBounces` (0/1) e
+// os inimigos/nave ficam fixos nas linhas 0/1 — a descida real por linha
+// (usando ALTURA inteiro) chega na Etapa 9d. Só o eixo horizontal já usa a
+// largura nova (LARGURA).
 static void moveGroup() {
   int newCol = (int)groupCol + groupDir;
   bool hitEdge = false;
@@ -186,8 +190,8 @@ static void moveGroup() {
     newCol = 0;
     hitEdge = true;
   }
-  if (newCol + (NUM_ENEMIES - 1) > 15) {
-    newCol = 15 - (NUM_ENEMIES - 1);
+  if (newCol + (NUM_ENEMIES - 1) > LARGURA - 1) {
+    newCol = (LARGURA - 1) - (NUM_ENEMIES - 1);
     hitEdge = true;
   }
   groupCol = (uint8_t)newCol;
@@ -227,7 +231,7 @@ void invadersInit() {
   countdownStart = millis();
   countdownLastStep = 255;
 
-  for (uint8_t i = 0; i < 32; i++) drawnCells[i] = 0;
+  for (uint8_t i = 0; i < LARGURA * ALTURA; i++) drawnCells[i] = 0;
   lcd.clear();
 }
 
@@ -264,7 +268,7 @@ void invadersUpdate(unsigned long now) {
   uint8_t evento = readButtons(now);
   switch (evento) {
     case BTN_ESQ:  if (shipCol > 0) shipCol--; break;
-    case BTN_DIR:  if (shipCol < 15) shipCol++; break;
+    case BTN_DIR:  if (shipCol < LARGURA - 1) shipCol++; break;
     case BTN_CIMA: invadersShoot(); break;
     default: break;
   }
@@ -308,21 +312,21 @@ void invadersUpdate(unsigned long now) {
 }
 
 void invadersDraw() {
-  bool nowOccupied[32] = { false };
+  bool nowOccupied[LARGURA * ALTURA] = { false };
 
   for (uint8_t i = 0; i < NUM_ENEMIES; i++) {
     if (invadersIsAlive(i)) {
       uint8_t col = groupCol + i;
-      nowOccupied[col * 2 + 0] = true;
+      nowOccupied[col * ALTURA + 0] = true;
     }
   }
-  nowOccupied[shipCol * 2 + 1] = true;
-  if (playerProjActive) nowOccupied[playerProjCol * 2 + 1] = true;
-  if (enemyProjActive) nowOccupied[enemyProjCol * 2 + 0] = true;
+  nowOccupied[shipCol * ALTURA + 1] = true;
+  if (playerProjActive) nowOccupied[playerProjCol * ALTURA + 1] = true;
+  if (enemyProjActive) nowOccupied[enemyProjCol * ALTURA + 0] = true;
 
-  for (uint8_t cell = 0; cell < 32; cell++) {
+  for (uint8_t cell = 0; cell < LARGURA * ALTURA; cell++) {
     if (drawnCells[cell] && !nowOccupied[cell]) {
-      lcd.setCursor(cell / 2, cell % 2);
+      lcd.setCursor(cell / ALTURA, cell % ALTURA);
       lcd.print(F(" "));
     }
   }
@@ -344,5 +348,5 @@ void invadersDraw() {
     lcd.write((uint8_t)5);
   }
 
-  for (uint8_t cell = 0; cell < 32; cell++) drawnCells[cell] = nowOccupied[cell];
+  for (uint8_t cell = 0; cell < LARGURA * ALTURA; cell++) drawnCells[cell] = nowOccupied[cell];
 }

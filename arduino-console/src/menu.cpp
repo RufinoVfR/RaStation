@@ -66,11 +66,11 @@ static void drawLine0(uint8_t revealCount) {
   char nameLocal[9]; // "INVADERS" + '\0'
   strcpy_P(nameLocal, GAMES[selectedIndex].name);
 
-  char line[17];
-  memset(line, ' ', 16);
-  line[16] = '\0';
+  char line[LARGURA + 1];
+  memset(line, ' ', LARGURA);
+  line[LARGURA] = '\0';
   line[0] = '<';
-  line[15] = '>';
+  line[LARGURA - 1] = '>';
   for (uint8_t i = 0; i < revealCount && nameLocal[i] != '\0'; i++) {
     line[2 + i] = nameLocal[i];
   }
@@ -79,14 +79,14 @@ static void drawLine0(uint8_t revealCount) {
   lcd.print(line);
 }
 
-// "Cobra    Hi:150" — descrição curta à esquerda, recorde à direita.
+// "Cobra         Hi:150" — descrição curta à esquerda, recorde à direita.
 static void drawLine1() {
-  char descLocal[10];
+  char descLocal[14];
   strcpy_P(descLocal, GAMES[selectedIndex].desc);
   int highScore = loadHighScore(GAMES[selectedIndex].scoreType);
 
-  char line[17];
-  snprintf(line, sizeof(line), "%-9.9s Hi:%-3d", descLocal, highScore);
+  char line[LARGURA + 1];
+  snprintf(line, sizeof(line), "%-13.13s Hi:%-3d", descLocal, highScore);
   lcd.setCursor(0, 1);
   lcd.print(line);
 }
@@ -158,12 +158,12 @@ int getSelectedIndex() {
 static void drawGameOverScreen(int score) {
   lcd.clear();
   lcd.setCursor(0, 0);
-  lcd.print(F("   GAME OVER    "));
+  lcd.print(F("     GAME OVER      "));
 
   char scoreStr[6];
   snprintf(scoreStr, sizeof(scoreStr), "%d", score);
-  char line1[17];
-  snprintf(line1, sizeof(line1), "Pontos: %-5s>OK", scoreStr);
+  char line1[LARGURA + 1];
+  snprintf(line1, sizeof(line1), "Pontos: %-9s>OK", scoreStr);
   lcd.setCursor(0, 1);
   lcd.print(line1);
 }
@@ -182,9 +182,9 @@ void showGameOver(GameType game, int score) {
 
     lcd.clear();
     lcd.setCursor(0, 0);
-    lcd.print(F("  NOVO RECORDE! "));
-    char line1[17];
-    snprintf(line1, sizeof(line1), "   Pontos: %-3d  ", score);
+    lcd.print(F("    NOVO RECORDE!   "));
+    char line1[LARGURA + 1];
+    snprintf(line1, sizeof(line1), "     Pontos: %-3d    ", score);
     lcd.setCursor(0, 1);
     lcd.print(line1);
   } else {

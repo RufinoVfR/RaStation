@@ -29,8 +29,12 @@ static SnakeState snakeState = SNAKE_COUNTDOWN;
 static unsigned long countdownStart = 0;
 static uint8_t countdownLastStep = 255;
 
-static uint8_t drawnCells[32]; // 1 se a célula (col*2+row) estava desenhada no último frame
+static uint8_t drawnCells[LARGURA * ALTURA]; // 1 se a célula (col*ALTURA+row) estava desenhada no último frame
 
+// NOTA (Etapa 9a): esse empacotamento de 4+4 bits só suporta coluna 0-15 e
+// linha 0-1 — o campo de jogo da cobra continua 16x2 por enquanto, dentro
+// da tela maior. O empacotamento de 5+3 bits (coluna 0-31, linha 0-7) e o
+// movimento vertical de verdade chegam na Etapa 9b.
 uint8_t packPos(uint8_t col, uint8_t row) {
   return (col << 4) | (row & 0x0F);
 }
@@ -237,7 +241,7 @@ void snakeInit() {
   countdownStart = millis();
   countdownLastStep = 255;
 
-  for (uint8_t i = 0; i < 32; i++) drawnCells[i] = 0;
+  for (uint8_t i = 0; i < LARGURA * ALTURA; i++) drawnCells[i] = 0;
 
   lcd.clear();
 }
@@ -292,20 +296,20 @@ void snakeUpdate(unsigned long now) {
 }
 
 void snakeDraw() {
-  bool nowOccupied[32] = { false };
+  bool nowOccupied[LARGURA * ALTURA] = { false };
 
   for (uint8_t i = 0; i < length; i++) {
     uint8_t pos = snakeGetSegment(i);
-    uint8_t cell = unpackCol(pos) * 2 + unpackRow(pos);
+    uint8_t cell = unpackCol(pos) * ALTURA + unpackRow(pos);
     nowOccupied[cell] = true;
   }
-  uint8_t foodCell = unpackCol(foodPos) * 2 + unpackRow(foodPos);
+  uint8_t foodCell = unpackCol(foodPos) * ALTURA + unpackRow(foodPos);
   nowOccupied[foodCell] = true;
 
   // apaga só as células que estavam ocupadas e não estão mais (sem lcd.clear())
-  for (uint8_t cell = 0; cell < 32; cell++) {
+  for (uint8_t cell = 0; cell < LARGURA * ALTURA; cell++) {
     if (drawnCells[cell] && !nowOccupied[cell]) {
-      lcd.setCursor(cell / 2, cell % 2);
+      lcd.setCursor(cell / ALTURA, cell % ALTURA);
       lcd.print(F(" "));
     }
   }
@@ -318,10 +322,10 @@ void snakeDraw() {
   lcd.setCursor(unpackCol(foodPos), unpackRow(foodPos));
   lcd.write((uint8_t)2);
 
-  for (uint8_t cell = 0; cell < 32; cell++) drawnCells[cell] = nowOccupied[cell];
+  for (uint8_t cell = 0; cell < LARGURA * ALTURA; cell++) drawnCells[cell] = nowOccupied[cell];
 
   char scoreStr[5];
   snprintf(scoreStr, sizeof(scoreStr), "%3d", score);
-  lcd.setCursor(13, 0);
+  lcd.setCursor(LARGURA - 3, 0);
   lcd.print(scoreStr);
 }

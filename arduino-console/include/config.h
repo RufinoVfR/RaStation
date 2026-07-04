@@ -23,9 +23,9 @@
 // Buzzer passivo (requer tone())
 #define BUZZER_PIN 10
 
-// Dimensões do display
-#define LARGURA 16
-#define ALTURA  2
+// Dimensões do display (LCD 20x4)
+#define LARGURA 20
+#define ALTURA  4
 
 // Estados do sistema
 enum GameState {
