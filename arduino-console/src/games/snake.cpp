@@ -31,20 +31,18 @@ static uint8_t countdownLastStep = 255;
 
 static uint8_t drawnCells[LARGURA * ALTURA]; // 1 se a célula (col*ALTURA+row) estava desenhada no último frame
 
-// NOTA (Etapa 9a): esse empacotamento de 4+4 bits só suporta coluna 0-15 e
-// linha 0-1 — o campo de jogo da cobra continua 16x2 por enquanto, dentro
-// da tela maior. O empacotamento de 5+3 bits (coluna 0-31, linha 0-7) e o
-// movimento vertical de verdade chegam na Etapa 9b.
+// Empacotamento de 5+3 bits: coluna em bits 7-3 (0-31), linha em bits 2-0
+// (0-7) — cobre os 20x4 do display novo com folga.
 uint8_t packPos(uint8_t col, uint8_t row) {
-  return (col << 4) | (row & 0x0F);
+  return (col << 3) | (row & 0x07);
 }
 
 uint8_t unpackCol(uint8_t pos) {
-  return pos >> 4;
+  return pos >> 3;
 }
 
 uint8_t unpackRow(uint8_t pos) {
-  return pos & 0x0F;
+  return pos & 0x07;
 }
 
 void snakeResetBuffer() {
@@ -127,7 +125,7 @@ static bool isOccupied(uint8_t pos) {
 void snakeSpawnFood() {
   uint8_t candidate;
   do {
-    candidate = packPos((uint8_t)random(16), (uint8_t)random(2));
+    candidate = packPos((uint8_t)random(LARGURA), (uint8_t)random(ALTURA));
   } while (isOccupied(candidate));
   foodPos = candidate;
 }
@@ -149,8 +147,10 @@ void snakeMoveStep() {
 
   switch (direction) {
     case DIR_UP:
+      row--;
+      break;
     case DIR_DOWN:
-      row = 1 - row; // só há 2 linhas: "cima"/"baixo" alternam a linha
+      row++;
       break;
     case DIR_LEFT:
       col--;
@@ -160,7 +160,7 @@ void snakeMoveStep() {
       break;
   }
 
-  if (col < 0 || col > 15) {
+  if (col < 0 || col > LARGURA - 1 || row < 0 || row > ALTURA - 1) {
     gameOver = true;
     playSound(SFX_SNAKE_DEAD);
     return;
@@ -225,10 +225,10 @@ void snakeInit() {
   createCustomChars();
 
   snakeResetBuffer();
-  // cobra de 3 segmentos no centro do campo (16x2), começando indo pra direita
-  snakePush(packPos(6, 0));
-  snakePush(packPos(7, 0));
-  snakePush(packPos(8, 0));
+  // cobra de 3 segmentos no centro do campo (20x4), começando indo pra direita
+  snakePush(packPos(LARGURA / 2 - 2, ALTURA / 2));
+  snakePush(packPos(LARGURA / 2 - 1, ALTURA / 2));
+  snakePush(packPos(LARGURA / 2, ALTURA / 2));
   direction = DIR_RIGHT;
 
   score = 0;

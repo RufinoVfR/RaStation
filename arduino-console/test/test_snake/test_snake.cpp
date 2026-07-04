@@ -28,6 +28,12 @@ void test_pack_unpack_posicao() {
   TEST_ASSERT_EQUAL(0, unpackRow(p3));
 }
 
+void test_pack_unpack_com_coluna_19() {
+  uint8_t p = packPos(19, 3);
+  TEST_ASSERT_EQUAL(19, unpackCol(p));
+  TEST_ASSERT_EQUAL(3, unpackRow(p));
+}
+
 void test_buffer_circular_push() {
   TEST_ASSERT_EQUAL(0, snakeGetLength());
   snakePush(packPos(5, 0));
@@ -88,7 +94,7 @@ void test_colisao_com_parede_esquerda() {
 }
 
 void test_colisao_com_parede_direita() {
-  snakePush(packPos(15, 0));
+  snakePush(packPos(LARGURA - 1, 0));
   snakeSetDirection(DIR_RIGHT);
   snakeSetFoodPos(packPos(0, 1));
 
@@ -97,15 +103,46 @@ void test_colisao_com_parede_direita() {
   TEST_ASSERT_TRUE(snakeIsGameOver());
 }
 
+void test_colisao_parede_superior() {
+  snakePush(packPos(5, 0));
+  snakeForceDirection(DIR_UP); // direção padrão é RIGHT; UP direto é permitido (não é reversão)
+  snakeSetFoodPos(packPos(15, 3));
+
+  snakeMoveStep();
+
+  TEST_ASSERT_TRUE(snakeIsGameOver());
+}
+
+void test_colisao_parede_inferior() {
+  snakePush(packPos(5, ALTURA - 1));
+  snakeForceDirection(DIR_DOWN);
+  snakeSetFoodPos(packPos(15, 0));
+
+  snakeMoveStep();
+
+  TEST_ASSERT_TRUE(snakeIsGameOver());
+}
+
+void test_movimento_vertical_real() {
+  snakePush(packPos(5, 1));
+  snakeForceDirection(DIR_UP);
+  snakeSetFoodPos(packPos(15, 3)); // longe, não é comida
+
+  snakeMoveStep();
+
+  // movimento vertical de verdade: linha 1 -> linha 0 (não "alterna" de volta pra 1)
+  TEST_ASSERT_EQUAL(0, unpackRow(snakeGetHead()));
+}
+
 void test_colisao_consigo_mesma() {
-  // U: cauda(5,0) -> (6,0) -> (7,0) -> (7,1) -> cabeça(6,1)
+  // laço: cauda(5,2) -> (5,1) -> (5,0) -> (6,0) -> cabeça(6,1)
+  snakePush(packPos(5, 2));
+  snakePush(packPos(5, 1));
   snakePush(packPos(5, 0));
   snakePush(packPos(6, 0));
-  snakePush(packPos(7, 0));
-  snakePush(packPos(7, 1));
   snakePush(packPos(6, 1));
-  snakeSetDirection(DIR_DOWN); // de (6,1) desce pra (6,0), que é o meio do corpo
-  snakeSetFoodPos(packPos(15, 1));
+  snakeSetDirection(DIR_UP); // de (6,1) sobe pra (6,0), que é o meio do corpo
+  snakeSetFoodPos(packPos(15, 3));
 
   snakeMoveStep();
 
@@ -203,6 +240,7 @@ void test_simulacao_ascii_5_frames() {
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_pack_unpack_posicao);
+  RUN_TEST(test_pack_unpack_com_coluna_19);
   RUN_TEST(test_buffer_circular_push);
   RUN_TEST(test_buffer_circular_move);
   RUN_TEST(test_cobra_cresce_ao_comer);
@@ -210,6 +248,9 @@ int main() {
   RUN_TEST(test_sem_reversao_180_cima_para_baixo);
   RUN_TEST(test_colisao_com_parede_esquerda);
   RUN_TEST(test_colisao_com_parede_direita);
+  RUN_TEST(test_colisao_parede_superior);
+  RUN_TEST(test_colisao_parede_inferior);
+  RUN_TEST(test_movimento_vertical_real);
   RUN_TEST(test_colisao_consigo_mesma);
   RUN_TEST(test_pontuacao_incrementa_ao_comer);
   RUN_TEST(test_velocidade_reduz_a_cada_3_comidas);
