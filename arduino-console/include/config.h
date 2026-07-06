@@ -2,15 +2,13 @@
 #define CONFIG_H
 
 // LCD 16x2 - LiquidCrystal(RS, EN, D4, D5, D6, D7)
-// Usa A0-A5 (como pinos digitais) em vez de D2/D3/D4/D5/D11/D12 — um desses
-// pinos digitais acabou danificado durante a montagem, então o LCD foi
-// remapeado pros pinos analógicos, que funcionam normalmente como digitais.
-#define LCD_RS A0
-#define LCD_EN A1
-#define LCD_D4 A2
-#define LCD_D5 A3
-#define LCD_D6 A4
-#define LCD_D7 A5
+// Mapeamento original: RS=D12, EN=D11, D4=D5, D5=D4, D6=D3, D7=D2.
+#define LCD_RS 12
+#define LCD_EN 11
+#define LCD_D4 5
+#define LCD_D5 4
+#define LCD_D6 3
+#define LCD_D7 2
 
 // Botões push-button (pull-down externo, solto = LOW, pressionado = HIGH)
 // Os valores também servem como identificador de botão retornado por readButtons()

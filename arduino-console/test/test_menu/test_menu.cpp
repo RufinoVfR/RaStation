@@ -20,14 +20,16 @@ void setUp() {
 
 void tearDown() {}
 
-// Avança tempo suficiente pra passar a splash inicial (digitação + 3
-// piscadas) e chegar em MENU_ANIMATING. Precisa de 2 chamadas porque a
-// transição digitação->piscar só é processada numa chamada, e piscar->menu
-// só é processada na chamada seguinte (mesmo motivo do "seed read").
+// Avança tempo suficiente pra passar o boot logo "RaStation" (cascata de
+// queda das 9 letras + pausa final) e chegar em MENU_ANIMATING. Precisa de
+// 2 chamadas: a primeira detecta que todas as letras assentaram (última
+// letra assenta em ~1160ms: começa a cair em 8*120ms=960ms, leva mais
+// 2*100ms=200ms pra assentar), a segunda processa a pausa de 1500ms e só
+// então dispara startAnimation() (mesmo motivo do "seed read").
 static void finishSplash() {
-  advanceTime(1000);
+  advanceTime(1200);
   menuUpdate(millis());
-  advanceTime(2000);
+  advanceTime(1500);
   menuUpdate(millis());
 }
 
@@ -58,6 +60,69 @@ void test_splash_pula_ao_apertar_botao() {
   menuUpdate(millis()); // seed: registra a transição do pino
   advanceTime(60);
   GameState result = menuUpdate(millis()); // evento detectado -> pula a splash
+
+  TEST_ASSERT_EQUAL(STATE_MENU, result);
+  TEST_ASSERT_EQUAL(0, getSelectedIndex()); // já entrou na animação do primeiro jogo
+}
+
+// Coluna onde a primeira letra de "RaStation" (9 letras) é desenhada,
+// centralizada em LARGURA colunas — mesmo cálculo usado em drawBootFrame().
+static const uint8_t BOOT_START_COL = (LARGURA - 9) / 2;
+
+void test_letra_avanca_de_linha_no_instante_certo() {
+  // t=0: primeira letra ('R') já no primeiro passo da queda (linha 0)
+  menuUpdate(millis());
+  TEST_ASSERT_EQUAL('R', lcd.screen[0][BOOT_START_COL]);
+
+  // +100ms: segundo passo, o "solavanco" (linha 2)
+  advanceTime(100);
+  menuUpdate(millis());
+  TEST_ASSERT_EQUAL('R', lcd.screen[2][BOOT_START_COL]);
+  TEST_ASSERT_EQUAL(' ', lcd.screen[0][BOOT_START_COL]);
+
+  // +100ms: assenta na linha de destino (linha 1)
+  advanceTime(100);
+  menuUpdate(millis());
+  TEST_ASSERT_EQUAL('R', lcd.screen[1][BOOT_START_COL]);
+  TEST_ASSERT_EQUAL(' ', lcd.screen[2][BOOT_START_COL]);
+}
+
+void test_cascata_respeita_atraso_entre_letras() {
+  // Logo no início, a segunda letra ('a') ainda não começou a cair.
+  menuUpdate(millis());
+  TEST_ASSERT_EQUAL(' ', lcd.screen[0][BOOT_START_COL + 1]);
+  TEST_ASSERT_EQUAL(' ', lcd.screen[1][BOOT_START_COL + 1]);
+  TEST_ASSERT_EQUAL(' ', lcd.screen[2][BOOT_START_COL + 1]);
+
+  // Depois do atraso de cascata (120ms), a segunda letra começa a cair.
+  advanceTime(120);
+  menuUpdate(millis());
+  TEST_ASSERT_EQUAL('a', lcd.screen[0][BOOT_START_COL + 1]);
+}
+
+void test_pausa_final_antes_do_menu() {
+  advanceTime(1160);
+  menuUpdate(millis()); // última letra assenta: "RaStation" completo na linha 1
+  TEST_ASSERT_TRUE(lcd.contains("RaStation"));
+
+  advanceTime(1499);
+  menuUpdate(millis()); // faltando 1ms pra completar a pausa de 1500ms
+  TEST_ASSERT_TRUE(lcd.contains("RaStation"));
+
+  advanceTime(2);
+  menuUpdate(millis()); // pausa completa -> libera o menu (redesenha linha 0/1)
+  TEST_ASSERT_FALSE(lcd.contains("RaStation"));
+  TEST_ASSERT_EQUAL('<', lcd.screen[0][0]);
+}
+
+void test_botao_pula_boot_logo_no_meio_da_animacao() {
+  advanceTime(500); // no meio da cascata de queda
+  menuUpdate(millis());
+
+  setPin(BTN_ESQ, HIGH);
+  menuUpdate(millis()); // seed
+  advanceTime(60);
+  GameState result = menuUpdate(millis());
 
   TEST_ASSERT_EQUAL(STATE_MENU, result);
   TEST_ASSERT_EQUAL(0, getSelectedIndex()); // já entrou na animação do primeiro jogo
@@ -153,6 +218,10 @@ void test_simulacao_ascii_dos_3_jogos() {
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_splash_pula_ao_apertar_botao);
+  RUN_TEST(test_letra_avanca_de_linha_no_instante_certo);
+  RUN_TEST(test_cascata_respeita_atraso_entre_letras);
+  RUN_TEST(test_pausa_final_antes_do_menu);
+  RUN_TEST(test_botao_pula_boot_logo_no_meio_da_animacao);
   RUN_TEST(test_estado_animating_nao_aceita_input);
   RUN_TEST(test_navegacao_dir_avanca);
   RUN_TEST(test_navegacao_wraparound_dir);

@@ -1160,12 +1160,12 @@ Adicione um 5º botão físico, dedicado ao pulo do Flappy Bird (o sensor PIR
 fica de fora deste lote de trabalho — ver observação no fim da etapa).
 
 ELETRÔNICA:
-- Botão de pulo no pino D2, mesmo circuito pull-down dos outros 4 botões
-  (5V → botão → D2 → resistor 10kΩ → GND). Botão solto = LOW, pressionado
+- Botão de pulo no pino D13, mesmo circuito pull-down dos outros 4 botões
+  (5V → botão → D13 → resistor 10kΩ → GND). Botão solto = LOW, pressionado
   = HIGH — mesma convenção dos outros 4.
 
 SOFTWARE:
-1. include/config.h: novo `#define BTN_PULAR 2`.
+1. include/config.h: novo `#define BTN_PULAR 13`.
 2. src/input.h/input.cpp: nova função `bool readJumpButton(unsigned long now)`
    com debounce de 50ms, seguindo exatamente o mesmo padrão de
    `updatePressed()` já usado pros outros 4 botões — evento único por
@@ -1238,7 +1238,7 @@ MECÂNICAS:
 - Pontuação: +1 ao ultrapassar um cano sem colidir.
 - Dificuldade: a cada 5 canos ultrapassados, o intervalo de tick da física
   diminui (mesmo padrão de "reduz e trava num piso" do Snake/Pong/Invaders).
-- Controle: só pelo botão de pulo dedicado (D2) por enquanto (sem PIR nesta
+- Controle: só pelo botão de pulo dedicado (D13) por enquanto (sem PIR nesta
   etapa). A leitura de input do jogo fica isolada numa função própria
   (ex.: checkJump()), preparada pra somar uma segunda fonte no futuro sem
   reescrever a lógica do jogo.

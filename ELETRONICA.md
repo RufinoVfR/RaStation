@@ -336,7 +336,7 @@ void updateSound(unsigned long now) {
 ```
                     Arduino Uno R3
                    ┌─────────────┐
-             Reset─┤             ├─ D13 (SCK)     — LIVRE
+             Reset─┤             ├─ D13 (SCK)     → Botão de pulo
               3.3V─┤             ├─ D12 (MISO)    → LCD RS
                 5V─┤             ├─ D11 (MOSI/PWM)→ LCD EN
                GND─┤             ├─ D10 (PWM)     → Buzzer
@@ -354,12 +354,12 @@ void updateSound(unsigned long now) {
 
 **Pinos livres disponíveis para expansão futura:**
 - **D0, D1** — evitar (conflito com Serial/USB durante upload)
-- **D13** — tem LED onboard, usar com cautela
 - **A0, A1, A2, A3, A4, A5** — todos livres (analógicos/digitais)
 
 > **Joystick KY-023 (expansão futura):**
-> VRX → A0, VRY → A1, SW → D13
-> Já mapeado para não conflitar com pinos em uso.
+> VRX → A0, VRY → A1, SW → **pino ainda não definido** (D13 passou a ser
+> usado pelo botão de pulo dedicado — Etapa 10 — quando o joystick for
+> implementado, escolher outro pino digital livre pro SW nessa hora).
 
 ---
 
@@ -414,7 +414,7 @@ CORRETO — toda espera via millis():
 | D0, D1 | Serial USB | Não usar durante operação normal |
 | D10 | Buzzer (tone) | tone() desativa PWM do D10 enquanto ativo |
 | D11 | LCD EN | Sem conflito |
-| D13 | Livre | LED onboard acende junto se usado como OUTPUT |
+| D13 | Botão de pulo (Etapa 10) | LED onboard acende junto (comportamento visual esperado, sem impacto funcional) |
 
 ### 9.4 Custom Characters do LCD
 
@@ -569,11 +569,12 @@ assunto.
 
 ### 13.4 Botão de pulo dedicado (Etapa 10)
 
-Mesmo circuito pull-down dos outros 4 botões, só que no pino **D2** (livre
-desde que o LCD foi remapeado pros pinos A0-A5):
+Mesmo circuito pull-down dos outros 4 botões, só que no pino **D13** (o LCD
+voltou a usar D2/D3/D4/D5/D11/D12, então D13 é o pino livre escolhido para
+o botão de pulo; tem o LED onboard, que acende junto sem impacto funcional):
 
 ```
-5V → [botão de pulo] → D2
+5V → [botão de pulo] → D13
                          |
                       10kΩ
                          |

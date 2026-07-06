@@ -34,10 +34,15 @@ static const uint8_t NUM_GAMES = sizeof(GAMES) / sizeof(GAMES[0]);
 static const unsigned long ANIM_CHAR_DELAY = 80;
 static const uint8_t REVEAL_ALL = 255; // maior que qualquer nome de jogo
 
-static const unsigned long SPLASH_CHAR_DELAY = 80;
-static const unsigned long SPLASH_BLINK_INTERVAL = 200;
-static const uint8_t SPLASH_BLINK_TRANSITIONS = 6; // 3 piscadas = 6 trocas de estado
-static const char SPLASH_TITLE[] PROGMEM = "ARCADE";
+// Boot logo "RaStation": cada letra cai e assenta no meio da tela, em
+// cascata, com um blip no buzzer a cada pouso. Assume ALTURA==4 (a
+// sequência de queda usa as 4 linhas do display novo).
+static const char BOOT_TITLE[] PROGMEM = "RaStation";
+static const uint8_t BOOT_LEN = 9;
+static const unsigned long BOOT_STEP_DELAY = 100;    // ms por passo de queda
+static const unsigned long BOOT_CASCADE_DELAY = 120; // ms entre o início da queda de cada letra
+static const unsigned long BOOT_PAUSE_MS = 1500;     // pausa parada depois que todas assentam
+static const uint8_t BOOT_FALL_ROWS[3] = { 0, 2, 1 }; // linha 0 -> 2 -> 1 (destino, com solavanco)
 
 static const unsigned long RECORD_FLASH_MS = 2000;
 
@@ -48,12 +53,11 @@ static unsigned long animLastStep = 0;
 static uint8_t animCharsShown = 0;
 static uint8_t animNameLen = 0;
 
-enum SplashPhase { SPLASH_TYPING, SPLASH_BLINKING };
-static SplashPhase splashPhase = SPLASH_TYPING;
-static unsigned long splashStepStart = 0;
-static uint8_t splashCharsShown = 0;
-static uint8_t splashBlinkTransitions = 0;
-static bool splashVisible = true;
+static unsigned long bootStartTime = 0;
+static uint16_t bootBlipPlayed = 0; // bit i = já tocou o blip de pouso da letra i
+static bool bootAllLanded = false;
+static unsigned long bootAllLandedTime = 0;
+static uint8_t bootLastDrawnRow[BOOT_LEN]; // 255 = ainda não desenhada nessa posição
 
 static bool showingGameOver = false;
 static bool showingRecordFlash = false;
@@ -111,37 +115,69 @@ static void startAnimation() {
   drawLine0(0);
 }
 
-static void drawSplashFrame(bool visible) {
-  lcd.setCursor(0, 0);
-  lcd.print(visible ? F("     ARCADE     ") : F("                "));
-  lcd.setCursor(0, 1);
-  lcd.print(visible ? F("   Press UP     ") : F("                "));
+// Toca um blip curto e não-bloqueante direto no buzzer, sem passar pela
+// fila de sound.h — o boot logo precisa do som sincronizado exatamente com
+// o instante em que cada letra assenta, e a fila genérica tem seu próprio
+// timing independente que não encaixaria certinho aqui.
+static void playBootBlip(uint8_t letterIndex) {
+  int freq = 300 + letterIndex * 60; // sobe um pouco a cada letra (arpejo)
+  tone(BUZZER_PIN, freq, 60);
 }
 
-static void drawSplashTyping(uint8_t revealCount) {
-  char titleLocal[7]; // "ARCADE" + '\0'
-  strcpy_P(titleLocal, SPLASH_TITLE);
+// Linha atual da letra `i` no instante `elapsed` (ms desde o início da
+// queda), ou 255 se essa letra ainda não deveria começar a cair. Marca
+// `*landed` quando ela já chegou na posição final.
+static uint8_t bootLetterRow(uint8_t i, unsigned long elapsed, bool* landed) {
+  unsigned long startOffset = (unsigned long)i * BOOT_CASCADE_DELAY;
+  *landed = false;
+  if (elapsed < startOffset) return 255;
 
-  char line[17];
-  memset(line, ' ', 16);
-  line[16] = '\0';
-  for (uint8_t i = 0; i < revealCount && titleLocal[i] != '\0'; i++) {
-    line[5 + i] = titleLocal[i]; // centralizado (6 chars em 16 colunas)
+  unsigned long letterElapsed = elapsed - startOffset;
+  uint8_t step = (uint8_t)(letterElapsed / BOOT_STEP_DELAY);
+  if (step >= 2) {
+    step = 2;
+    *landed = true;
   }
-  lcd.setCursor(0, 0);
-  lcd.print(line);
+  return BOOT_FALL_ROWS[step];
+}
+
+// Redesenha só as letras cuja linha mudou desde o último quadro (nunca
+// lcd.clear() aqui — regra de ouro do LCD, ver ELETRONICA.md — a tela já
+// foi limpa uma vez em startSplash()).
+static void drawBootFrame(unsigned long elapsed) {
+  char titleLocal[BOOT_LEN + 1];
+  strcpy_P(titleLocal, BOOT_TITLE);
+  uint8_t startCol = (LARGURA - BOOT_LEN) / 2;
+
+  for (uint8_t i = 0; i < BOOT_LEN; i++) {
+    bool landed;
+    uint8_t row = bootLetterRow(i, elapsed, &landed);
+    if (row == bootLastDrawnRow[i]) continue;
+
+    if (bootLastDrawnRow[i] != 255) {
+      lcd.setCursor(startCol + i, bootLastDrawnRow[i]);
+      lcd.write((uint8_t)' ');
+    }
+    if (row != 255) {
+      lcd.setCursor(startCol + i, row);
+      lcd.write((uint8_t)titleLocal[i]);
+    }
+    bootLastDrawnRow[i] = row;
+
+    if (landed && !(bootBlipPlayed & (1 << i))) {
+      bootBlipPlayed |= (1 << i);
+      playBootBlip(i);
+    }
+  }
 }
 
 static void startSplash() {
   menuState = MENU_SPLASH;
-  splashPhase = SPLASH_TYPING;
-  splashStepStart = millis();
-  splashCharsShown = 0;
-  splashBlinkTransitions = 0;
-  splashVisible = true;
+  bootStartTime = millis();
+  bootBlipPlayed = 0;
+  bootAllLanded = false;
   lcd.clear();
-  lcd.setCursor(0, 1);
-  lcd.print(F("   Press UP     "));
+  for (uint8_t i = 0; i < BOOT_LEN; i++) bootLastDrawnRow[i] = 255;
 }
 
 void menuInit() {
@@ -202,31 +238,23 @@ GameState menuUpdate(unsigned long now) {
       return STATE_MENU;
     }
 
-    if (splashPhase == SPLASH_TYPING) {
-      bool changed = false;
-      while (splashCharsShown < 6 && now - splashStepStart >= SPLASH_CHAR_DELAY) {
-        splashStepStart += SPLASH_CHAR_DELAY;
-        splashCharsShown++;
-        changed = true;
+    unsigned long elapsed = now - bootStartTime;
+
+    if (!bootAllLanded) {
+      drawBootFrame(elapsed);
+
+      bool allLandedNow = true;
+      for (uint8_t i = 0; i < BOOT_LEN; i++) {
+        bool landed;
+        bootLetterRow(i, elapsed, &landed);
+        if (!landed) { allLandedNow = false; break; }
       }
-      if (changed) drawSplashTyping(splashCharsShown);
-      if (splashCharsShown >= 6) {
-        splashPhase = SPLASH_BLINKING;
-        splashStepStart = now;
-        splashBlinkTransitions = 0;
-        splashVisible = true;
+      if (allLandedNow) {
+        bootAllLanded = true;
+        bootAllLandedTime = now;
       }
-    } else { // SPLASH_BLINKING
-      while (splashBlinkTransitions < SPLASH_BLINK_TRANSITIONS &&
-             now - splashStepStart >= SPLASH_BLINK_INTERVAL) {
-        splashStepStart += SPLASH_BLINK_INTERVAL;
-        splashVisible = !splashVisible;
-        splashBlinkTransitions++;
-        drawSplashFrame(splashVisible);
-      }
-      if (splashBlinkTransitions >= SPLASH_BLINK_TRANSITIONS) {
-        startAnimation();
-      }
+    } else if (now - bootAllLandedTime >= BOOT_PAUSE_MS) {
+      startAnimation();
     }
     return STATE_MENU;
   }
